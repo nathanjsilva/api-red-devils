@@ -9,17 +9,14 @@ use Illuminate\Support\Facades\Validator;
 
 class PlayerController extends Controller
 {
-    // Listar todos os jogadores
     public function index()
     {
         $players = Player::all();
         return response()->json($players);
     }
 
-    // Criar um novo jogador
     public function store(Request $request)
     {
-        // Validação
         $validator = Validator::make($request->all(), [
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|unique:players,email',
@@ -32,7 +29,6 @@ class PlayerController extends Controller
             ], 422);
         }
 
-        // Criação
         $player = Player::create([
             'name'     => $request->name,
             'email'    => $request->email,
@@ -42,7 +38,6 @@ class PlayerController extends Controller
         return response()->json($player, 201);
     }
 
-    // Mostrar jogador específico
     public function show($id)
     {
         $player = Player::find($id);
@@ -54,7 +49,6 @@ class PlayerController extends Controller
         return response()->json($player);
     }
 
-    // Atualizar jogador
     public function update(Request $request, $id)
     {
         $player = Player::find($id);
@@ -85,7 +79,6 @@ class PlayerController extends Controller
         return response()->json($player);
     }
 
-    // Deletar jogador
     public function destroy($id)
     {
         $player = Player::find($id);

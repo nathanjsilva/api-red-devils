@@ -9,7 +9,6 @@ Route::get('/', function () {
     return response()->json(['message' => 'API Red Devils - Laravel 11']);
 });
 
-// Grupo de rotas da API para jogadores
 Route::prefix('players')->group(function () {
     Route::post('/', [PlayerController::class, 'store']);        
     Route::get('/', [PlayerController::class, 'index']);         
