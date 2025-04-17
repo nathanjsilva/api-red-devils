@@ -21,6 +21,7 @@ class PlayerController extends Controller
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|unique:players,email',
             'password' => 'required|string|min:6',
+            'position' => 'required|in:linha,goleiro', // posição obrigatória
         ]);
 
         if ($validator->fails()) {
@@ -33,6 +34,7 @@ class PlayerController extends Controller
             'name'     => $request->name,
             'email'    => $request->email,
             'password' => Hash::make($request->password),
+            'position' => $request->position,
         ]);
 
         return response()->json($player, 201);
@@ -61,14 +63,16 @@ class PlayerController extends Controller
             'name'     => 'sometimes|string|max:255',
             'email'    => 'sometimes|email|unique:players,email,' . $player->id,
             'password' => 'sometimes|string|min:6',
+            'position' => 'sometimes|in:linha,goleiro', // posição opcional
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $player->name = $request->get('name', $player->name);
-        $player->email = $request->get('email', $player->email);
+        $player->name     = $request->get('name', $player->name);
+        $player->email    = $request->get('email', $player->email);
+        $player->position = $request->get('position', $player->position);
 
         if ($request->filled('password')) {
             $player->password = Hash::make($request->password);
