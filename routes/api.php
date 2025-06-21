@@ -9,6 +9,8 @@ use App\Http\Controllers\MatchPlayerController;
 
 // Rota pública de login
 Route::post('/login', [AuthController::class, 'login']);
+//rota para cadastrar jogador
+Route::post('/players', [PlayerController::class, 'store']);
 
 // Grupo protegido com autenticação Sanctum
 Route::middleware('auth:sanctum')->group(function () {
@@ -16,7 +18,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Rotas de jogadores
     Route::get('/players', [PlayerController::class, 'index']);
     Route::get('/players/{id}', [PlayerController::class, 'show']);
-    Route::post('/players', [PlayerController::class, 'store']);
     Route::put('/players/{id}', [PlayerController::class, 'update']);
     Route::delete('/players/{id}', [PlayerController::class, 'destroy']);
 
