@@ -18,10 +18,13 @@ class PlayerController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'     => 'required|string|max:255',
+            'name'     => 'required|string|max:255|unique:players,name',
             'email'    => 'required|email|unique:players,email',
             'password' => 'required|string|min:6',
-            'position' => 'required|in:linha,goleiro', // posição obrigatória
+            'position' => 'required|in:linha,goleiro',
+        ], [
+            'name.unique'  => 'O nome já está em uso.',
+            'email.unique' => 'Este e-mail já está cadastrado.',
         ]);
 
         if ($validator->fails()) {
