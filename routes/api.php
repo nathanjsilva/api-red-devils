@@ -15,7 +15,7 @@ Route::post('/players', [PlayerController::class, 'store']);
 // Grupo protegido com autenticação Sanctum
 Route::middleware('auth:sanctum')->group(function () {
     
-    // Rotas de jogadores
+    // Rotas de jogadores 
     Route::get('/players', [PlayerController::class, 'index']);
     Route::get('/players/{id}', [PlayerController::class, 'show']);
     Route::put('/players/{id}', [PlayerController::class, 'update']);
