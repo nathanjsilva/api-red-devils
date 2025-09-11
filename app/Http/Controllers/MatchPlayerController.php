@@ -3,34 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatchPlayer;
+use App\Http\Requests\StoreMatchPlayerRequest;
+use App\Http\Requests\UpdateMatchPlayerRequest;
+use App\Http\Resources\MatchPlayerResource;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class MatchPlayerController extends Controller
 {
     // Cadastra estatísticas de um jogador em uma pelada
-    public function store(Request $request)
+    public function store(StoreMatchPlayerRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'player_id'       => 'required|exists:players,id',
-            'pelada_id'       => 'required|exists:peladas,id',
-            'goals'           => 'nullable|integer|min:0',
-            'assists'         => 'nullable|integer|min:0',
-            'is_winner'       => 'nullable|boolean',
-            'goals_conceded'  => 'nullable|integer|min:0',
-        ]);
+        $matchPlayer = MatchPlayer::create($request->validated());
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $matchPlayer = MatchPlayer::create($validator->validated());
-
-        return response()->json($matchPlayer, 201);
+        return new MatchPlayerResource($matchPlayer);
     }
 
     // Atualiza estatísticas de um jogador em uma pelada
-    public function update(Request $request, $id)
+    public function update(UpdateMatchPlayerRequest $request, $id)
     {
         $matchPlayer = MatchPlayer::find($id);
 
@@ -38,20 +27,9 @@ class MatchPlayerController extends Controller
             return response()->json(['message' => 'Registro não encontrado.'], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'goals'           => 'nullable|integer|min:0',
-            'assists'         => 'nullable|integer|min:0',
-            'is_winner'       => 'nullable|boolean',
-            'goals_conceded'  => 'nullable|integer|min:0',
-        ]);
+        $matchPlayer->update($request->validated());
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        $matchPlayer->update($validator->validated());
-
-        return response()->json($matchPlayer);
+        return new MatchPlayerResource($matchPlayer);
     }
 
     // Remove o registro de estatísticas de um jogador em uma pelada

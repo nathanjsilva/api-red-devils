@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Player;
+use App\Http\Resources\AuthResource;
 
 class AuthController extends Controller
 {
@@ -23,10 +24,12 @@ class AuthController extends Controller
 
         $token = $player->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
+        $authData = (object) [
             'access_token' => $token,
             'token_type' => 'Bearer',
             'player' => $player,
-        ]);
+        ];
+
+        return new AuthResource($authData);
     }
 }

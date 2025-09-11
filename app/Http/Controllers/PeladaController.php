@@ -3,32 +3,26 @@
 namespace App\Http\Controllers;
 
 use App\Models\Pelada;
+use App\Http\Requests\StorePeladaRequest;
+use App\Http\Requests\UpdatePeladaRequest;
+use App\Http\Resources\PeladaResource;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class PeladaController extends Controller
 {
     public function index()
     {
         $peladas = Pelada::with('players')->get();
-        return response()->json($peladas);
+        return PeladaResource::collection($peladas);
     }
 
-    public function store(Request $request)
+    public function store(StorePeladaRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'date' => 'required|date',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
         $pelada = Pelada::create([
             'date' => $request->date,
         ]);
 
-        return response()->json($pelada, 201);
+        return new PeladaResource($pelada);
     }
 
     public function show($id)
@@ -39,10 +33,10 @@ class PeladaController extends Controller
             return response()->json(['message' => 'Pelada não encontrada.'], 404);
         }
 
-        return response()->json($pelada);
+        return new PeladaResource($pelada);
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdatePeladaRequest $request, $id)
     {
         $pelada = Pelada::find($id);
 
@@ -50,17 +44,9 @@ class PeladaController extends Controller
             return response()->json(['message' => 'Pelada não encontrada.'], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'date' => 'sometimes|date',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
         $pelada->update($request->only('date'));
 
-        return response()->json($pelada);
+        return new PeladaResource($pelada);
     }
 
     public function destroy($id)
