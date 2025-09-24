@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class MatchPlayerResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transforma o recurso em um array.
      *
      * @return array<string, mixed>
      */
@@ -16,6 +16,8 @@ class MatchPlayerResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'player_id' => $this->player_id,
+            'pelada_id' => $this->pelada_id,
             'player' => new PlayerResource($this->whenLoaded('player')),
             'pelada' => new PeladaResource($this->whenLoaded('pelada')),
             'goals' => $this->goals,

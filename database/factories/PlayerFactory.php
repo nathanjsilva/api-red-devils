@@ -12,12 +12,12 @@ use Illuminate\Support\Str;
 class PlayerFactory extends Factory
 {
     /**
-     * The current password being used by the factory.
+     * A senha atual sendo usada pela factory.
      */
     protected static ?string $password;
 
     /**
-     * Define the model's default state.
+     * Define o estado padrão do modelo.
      *
      * @return array<string, mixed>
      */
@@ -28,11 +28,13 @@ class PlayerFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'password' => static::$password ??= Hash::make('password'),
             'position' => fake()->randomElement(['linha', 'goleiro']),
+            'phone' => fake()->unique()->phoneNumber(),
+            'nickname' => fake()->unique()->userName(),
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Indica que o endereço de e-mail do modelo deve ser não verificado.
      */
     public function unverified(): static
     {
@@ -42,7 +44,7 @@ class PlayerFactory extends Factory
     }
 
     /**
-     * Create a player with linha position.
+     * Cria um jogador com posição linha.
      */
     public function linha(): static
     {
@@ -52,7 +54,7 @@ class PlayerFactory extends Factory
     }
 
     /**
-     * Create a player with goleiro position.
+     * Cria um jogador com posição goleiro.
      */
     public function goleiro(): static
     {

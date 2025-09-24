@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StorePlayerRequest extends FormRequest
+class AdminStorePlayerRequest extends FormRequest
 {
     /**
      * Determina se o usuário está autorizado a fazer esta requisição.
@@ -23,7 +23,7 @@ class StorePlayerRequest extends FormRequest
     {
         return [
             'name'     => 'required|string|max:255|unique:players,name',
-            'email'    => 'required|email|unique:players,email',
+            'email'    => 'nullable|email|unique:players,email',
             'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
             'position' => 'required|in:linha,goleiro',
             'phone'    => 'required|string|unique:players,phone',
@@ -41,7 +41,6 @@ class StorePlayerRequest extends FormRequest
         return [
             'name.required'     => 'O nome é obrigatório.',
             'name.unique'       => 'O nome já está em uso.',
-            'email.required'    => 'O e-mail é obrigatório.',
             'email.email'       => 'O e-mail deve ter um formato válido.',
             'email.unique'      => 'Este e-mail já está cadastrado.',
             'password.required' => 'A senha é obrigatória.',
@@ -56,3 +55,4 @@ class StorePlayerRequest extends FormRequest
         ];
     }
 }
+

@@ -16,6 +16,8 @@ class Player extends Authenticatable
         'email',
         'password',
         'position',
+        'phone',
+        'nickname',
     ];
 
     protected $hidden = [

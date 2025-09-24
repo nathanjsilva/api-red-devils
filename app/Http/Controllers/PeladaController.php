@@ -20,6 +20,10 @@ class PeladaController extends Controller
     {
         $pelada = Pelada::create([
             'date' => $request->date,
+            'location' => $request->location,
+            'qtd_times' => $request->qtd_times,
+            'qtd_jogadores_por_time' => $request->qtd_jogadores_por_time,
+            'qtd_goleiros' => $request->qtd_goleiros,
         ]);
 
         return new PeladaResource($pelada);
@@ -44,7 +48,13 @@ class PeladaController extends Controller
             return response()->json(['message' => 'Pelada não encontrada.'], 404);
         }
 
-        $pelada->update($request->only('date'));
+        $pelada->update($request->only([
+            'date', 
+            'location', 
+            'qtd_times', 
+            'qtd_jogadores_por_time', 
+            'qtd_goleiros'
+        ]));
 
         return new PeladaResource($pelada);
     }

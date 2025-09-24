@@ -9,7 +9,13 @@ class Pelada extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['date'];
+    protected $fillable = [
+        'date',
+        'location',
+        'qtd_times',
+        'qtd_jogadores_por_time',
+        'qtd_goleiros'
+    ];
 
     public function matchPlayers()
     {
@@ -21,6 +27,10 @@ class Pelada extends Model
         return $this->belongsToMany(Player::class, 'match_players')
                     ->withPivot('goals', 'assists', 'is_winner', 'goals_conceded')
                     ->withTimestamps();
-}
+    }
 
+    public function teams()
+    {
+        return $this->hasMany(Team::class);
+    }
 }

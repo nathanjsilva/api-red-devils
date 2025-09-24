@@ -11,21 +11,23 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('players', function (Blueprint $table) {
+        Schema::create('team_players', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->string('password');
+            $table->foreignId('team_id')->constrained()->onDelete('cascade');
+            $table->foreignId('player_id')->constrained()->onDelete('cascade');
             $table->timestamps();
+            
+            // Garantir que um jogador só pode estar em um time por pelada
+            $table->unique(['team_id', 'player_id']);
         });
     }
-
 
     /**
      * Reverte as migrações.
      */
     public function down(): void
     {
-        Schema::dropIfExists('players');
+        Schema::dropIfExists('team_players');
     }
 };
+

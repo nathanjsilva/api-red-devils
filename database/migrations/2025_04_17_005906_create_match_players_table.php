@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Executa as migrações.
      */
     public function up(): void
     {
@@ -16,9 +16,9 @@ return new class extends Migration
             $table->foreignId('player_id')->constrained()->onDelete('cascade');
             $table->foreignId('pelada_id')->constrained()->onDelete('cascade');
 
-            $table->unsignedTinyInteger('goals')->default(0);
-            $table->unsignedTinyInteger('assists')->default(0);
-            $table->unsignedTinyInteger('goals_conceded')->nullable(); // só para goleiros
+            $table->unsignedInteger('goals')->default(0);
+            $table->unsignedInteger('assists')->default(0);
+            $table->unsignedInteger('goals_conceded')->nullable(); // só para goleiros
             $table->boolean('is_winner')->default(false);
 
             $table->timestamps();
@@ -27,7 +27,7 @@ return new class extends Migration
 
 
     /**
-     * Reverse the migrations.
+     * Reverte as migrações.
      */
     public function down(): void
     {

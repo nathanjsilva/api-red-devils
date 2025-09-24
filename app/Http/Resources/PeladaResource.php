@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class PeladaResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transforma o recurso em um array.
      *
      * @return array<string, mixed>
      */
@@ -17,10 +17,14 @@ class PeladaResource extends JsonResource
         return [
             'id' => $this->id,
             'date' => $this->date ? (is_string($this->date) ? $this->date : $this->date->format('Y-m-d')) : null,
-            'players_count' => $this->whenLoaded('players', function () {
-                return $this->players->count();
+            'location' => $this->location,
+            'qtd_times' => $this->qtd_times,
+            'qtd_jogadores_por_time' => $this->qtd_jogadores_por_time,
+            'qtd_goleiros' => $this->qtd_goleiros,
+            'players_count' => $this->whenLoaded('matchPlayers', function () {
+                return $this->matchPlayers->count();
             }),
-            'players' => PlayerResource::collection($this->whenLoaded('players')),
+            'players' => MatchPlayerResource::collection($this->whenLoaded('matchPlayers')),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class PlayerResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transforma o recurso em um array.
      *
      * @return array<string, mixed>
      */
@@ -19,6 +19,8 @@ class PlayerResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'position' => $this->position,
+            'phone' => $this->phone,
+            'nickname' => $this->nickname,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

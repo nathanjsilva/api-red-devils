@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class MatchPlayerFactory extends Factory
 {
     /**
-     * Define the model's default state.
+     * Define o estado padrão do modelo.
      *
      * @return array<string, mixed>
      */
@@ -29,7 +29,7 @@ class MatchPlayerFactory extends Factory
     }
 
     /**
-     * Create a match player for a goleiro.
+     * Cria um jogador de partida para um goleiro.
      */
     public function goleiro(): static
     {
@@ -43,7 +43,7 @@ class MatchPlayerFactory extends Factory
     }
 
     /**
-     * Create a match player for a linha player.
+     * Cria um jogador de partida para um jogador de linha.
      */
     public function linha(): static
     {
@@ -57,7 +57,7 @@ class MatchPlayerFactory extends Factory
     }
 
     /**
-     * Create a winning match player.
+     * Cria um jogador de partida vencedor.
      */
     public function winner(): static
     {
@@ -67,7 +67,7 @@ class MatchPlayerFactory extends Factory
     }
 
     /**
-     * Create a losing match player.
+     * Cria um jogador de partida perdedor.
      */
     public function loser(): static
     {

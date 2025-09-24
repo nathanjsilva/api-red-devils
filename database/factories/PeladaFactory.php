@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 class PeladaFactory extends Factory
 {
     /**
-     * Define the model's default state.
+     * Define o estado padrão do modelo.
      *
      * @return array<string, mixed>
      */
@@ -18,11 +18,15 @@ class PeladaFactory extends Factory
     {
         return [
             'date' => fake()->dateTimeBetween('now', '+1 year')->format('Y-m-d'),
+            'location' => fake()->streetAddress(),
+            'qtd_times' => fake()->numberBetween(2, 4),
+            'qtd_jogadores_por_time' => fake()->numberBetween(6, 10),
+            'qtd_goleiros' => fake()->numberBetween(2, 4),
         ];
     }
 
     /**
-     * Create a pelada for today.
+     * Cria uma pelada para hoje.
      */
     public function today(): static
     {
@@ -32,7 +36,7 @@ class PeladaFactory extends Factory
     }
 
     /**
-     * Create a pelada for a specific date.
+     * Cria uma pelada para uma data específica.
      */
     public function forDate(string $date): static
     {

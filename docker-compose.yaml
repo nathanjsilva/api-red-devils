@@ -13,12 +13,13 @@ services:
       - api_red_devils_network
     depends_on:
       - mysql
+    restart: unless-stopped
 
   nginx:
-    image: nginx:latest
+    image: nginx:alpine
     container_name: api_red_devils_nginx
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
       - ./:/var/www
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
@@ -26,21 +27,21 @@ services:
       - api_red_devils_network
     depends_on:
       - app
+    restart: unless-stopped
 
   mysql:
     image: mysql:8.0
     container_name: api_red_devils_mysql
     environment:
       MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: api_red_devils
+      MYSQL_DATABASE: laravel
       MYSQL_USER: laravel
       MYSQL_PASSWORD: 1234
-    ports:
-      - "3306:3306"
     volumes:
       - dbdata:/var/lib/mysql
     networks:
       - api_red_devils_network
+    restart: unless-stopped
 
 volumes:
   dbdata:

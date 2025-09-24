@@ -8,7 +8,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class AuthResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transforma o recurso em um array.
      *
      * @return array<string, mixed>
      */
