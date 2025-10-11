@@ -1,5 +1,5 @@
+# Laravel
 /node_modules
-/public/build
 /public/hot
 /public/storage
 /storage/*.key
@@ -17,8 +17,47 @@ yarn-error.log
 /.idea
 /.vscode
 
-# Arquivos específicos do projeto
-API_EXAMPLES.md
-MELHORIAS_IMPLEMENTADAS.md
-TRADUCOES_REALIZADAS.md
-test_api_examples.md
+# Docker
+.dockerignore
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+storage/logs/*.log
+
+# Cache
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+
+# Backup files
+*.sql
+*.sql.gz
+backup_*.sql
+backup_*.sql.gz
+
+# SSL certificates
+ssl/
+*.pem
+*.key
+*.crt
+
+# Temporary files
+temp_*.json
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.phpunit.cache
