@@ -16,6 +16,9 @@ Route::post('/logout', [AuthController::class, 'logout']);
 // Rota pública para cadastrar jogador
 Route::post('/players', [PlayerController::class, 'store']);
 
+// Rota pública para criar primeiro admin (apenas se não existir nenhum admin)
+Route::post('/setup-first-admin', [AdminController::class, 'setupFirstAdmin']);
+
 // Grupo protegido com autenticação Sanctum
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -49,7 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     
     // Rotas de administração
-    Route::prefix('admin')->group(function () {
+    Route::prefix('admin')->middleware('admin')->group(function () {
         // Jogadores
         Route::post('players', [AdminController::class, 'storePlayer']);
         Route::put('players/{id}', [AdminController::class, 'updatePlayer']);
@@ -67,5 +70,9 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Organização de times
         Route::post('peladas/{peladaId}/organize-teams', [AdminController::class, 'organizeTeams']);
+        
+        // Gerenciar permissões de admin
+        Route::post('players/{id}/make-admin', [AdminController::class, 'makeAdmin']);
+        Route::post('players/{id}/remove-admin', [AdminController::class, 'removeAdmin']);
     });
 });

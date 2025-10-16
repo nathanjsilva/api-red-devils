@@ -18,6 +18,7 @@ class Player extends Authenticatable
         'position',
         'phone',
         'nickname',
+        'is_admin',
     ];
 
     protected $hidden = [
@@ -27,7 +28,14 @@ class Player extends Authenticatable
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'is_admin' => 'boolean',
     ];
+
+    // Métodos helper
+    public function isAdmin(): bool
+    {
+        return $this->is_admin;
+    }
 
     // Relacionamentos
         public function matchPlayers()

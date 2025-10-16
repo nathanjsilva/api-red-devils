@@ -20,6 +20,43 @@ use Illuminate\Http\Request;
 class AdminController extends Controller
 {
     /**
+     * Cria o primeiro administrador do sistema (apenas se não existir nenhum admin).
+     */
+    public function setupFirstAdmin(Request $request)
+    {
+        // Verifica se já existe algum admin
+        $adminExists = Player::where('is_admin', true)->exists();
+        if ($adminExists) {
+            return response()->json([
+                'message' => 'Já existem administradores no sistema. Use as rotas de admin para gerenciar permissões.'
+            ], 400);
+        }
+
+        $request->validate([
+            'name'     => 'required|string|max:255|unique:players,name',
+            'email'    => 'required|email|unique:players,email',
+            'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
+            'position' => 'required|in:linha,goleiro',
+            'phone'    => 'required|string|unique:players,phone',
+            'nickname' => 'required|string|max:255|unique:players,nickname',
+        ]);
+
+        $player = Player::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => bcrypt($request->password),
+            'position' => $request->position,
+            'phone' => $request->phone,
+            'nickname' => $request->nickname,
+            'is_admin' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'Primeiro administrador criado com sucesso!',
+            'player' => new PlayerResource($player)
+        ], 201);
+    }
+    /**
      * Cadastra um jogador (admin - email não obrigatório).
      */
     public function storePlayer(AdminStorePlayerRequest $request)
@@ -207,6 +244,50 @@ class AdminController extends Controller
                     'players' => $team->players
                 ];
             })
+        ]);
+    }
+
+    /**
+     * Transforma um jogador em admin.
+     */
+    public function makeAdmin($id)
+    {
+        $player = Player::find($id);
+        if (!$player) {
+            return response()->json(['message' => 'Jogador não encontrado.'], 404);
+        }
+
+        $player->update(['is_admin' => true]);
+        
+        return response()->json([
+            'message' => 'Jogador transformado em admin com sucesso.',
+            'player' => new PlayerResource($player)
+        ]);
+    }
+
+    /**
+     * Remove permissões de admin de um jogador.
+     */
+    public function removeAdmin($id)
+    {
+        $player = Player::find($id);
+        if (!$player) {
+            return response()->json(['message' => 'Jogador não encontrado.'], 404);
+        }
+
+        // Verifica se não é o último admin
+        $adminCount = Player::where('is_admin', true)->count();
+        if ($adminCount <= 1 && $player->is_admin) {
+            return response()->json([
+                'message' => 'Não é possível remover o último administrador do sistema.'
+            ], 400);
+        }
+
+        $player->update(['is_admin' => false]);
+        
+        return response()->json([
+            'message' => 'Permissões de admin removidas com sucesso.',
+            'player' => new PlayerResource($player)
         ]);
     }
 }

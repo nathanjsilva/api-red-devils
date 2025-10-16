@@ -28,6 +28,7 @@ class AdminStorePlayerRequest extends FormRequest
             'position' => 'required|in:linha,goleiro',
             'phone'    => 'required|string|unique:players,phone',
             'nickname' => 'required|string|max:255|unique:players,nickname',
+            'is_admin' => 'boolean',
         ];
     }
 
