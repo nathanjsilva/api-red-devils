@@ -21,6 +21,7 @@ class PlayerResource extends JsonResource
             'position' => $this->position,
             'phone' => $this->phone,
             'nickname' => $this->nickname,
+            'is_admin' => $this->is_admin,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];
