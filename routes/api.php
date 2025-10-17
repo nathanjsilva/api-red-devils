@@ -8,6 +8,7 @@ use App\Http\Controllers\PeladaController;
 use App\Http\Controllers\MatchPlayerController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\TeamController;
 
 // Rotas públicas
 Route::post('/login', [AuthController::class, 'login']);
@@ -31,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Rotas de peladas
     Route::get('/peladas', [PeladaController::class, 'index']);
     Route::get('/peladas/{id}', [PeladaController::class, 'show']);
+    Route::get('/peladas/date/{date}', [PeladaController::class, 'getByDate']);
     Route::post('/peladas', [PeladaController::class, 'store']);
     Route::put('/peladas/{id}', [PeladaController::class, 'update']);
     Route::delete('/peladas/{id}', [PeladaController::class, 'destroy']);
@@ -49,6 +51,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('rankings/assists', [StatisticsController::class, 'assistsRanking']);
         Route::get('rankings/goal-participation', [StatisticsController::class, 'goalParticipationRanking']);
         Route::get('rankings/goalkeepers', [StatisticsController::class, 'goalkeepersRanking']);
+        Route::get('pelada/{peladaId}', [StatisticsController::class, 'peladaStatistics']);
+    });
+    
+    // Rotas para organização de times
+    Route::prefix('teams')->group(function () {
+        Route::get('pelada/{peladaId}/fields', [TeamController::class, 'getTeamFields']);
+        Route::get('pelada/{peladaId}/players', [TeamController::class, 'getPeladaPlayers']);
+        Route::get('pelada/{peladaId}/organized', [TeamController::class, 'getPeladaTeams']);
+        Route::post('pelada/{peladaId}/organize', [TeamController::class, 'organizePlayers']);
     });
     
     // Rotas de administração

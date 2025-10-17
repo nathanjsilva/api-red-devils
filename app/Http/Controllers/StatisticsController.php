@@ -238,5 +238,72 @@ class StatisticsController extends Controller
             })
         ]);
     }
+
+    /**
+     * Obtém estatísticas de uma pelada específica.
+     */
+    public function peladaStatistics($peladaId)
+    {
+        $pelada = \App\Models\Pelada::find($peladaId);
+        if (!$pelada) {
+            return response()->json(['message' => 'Pelada não encontrada.'], 404);
+        }
+
+        $statistics = MatchPlayer::where('pelada_id', $peladaId)
+            ->with('player')
+            ->get()
+            ->map(function ($matchPlayer) {
+                $player = $matchPlayer->player;
+                $stats = [
+                    'player' => [
+                        'id' => $player->id,
+                        'name' => $player->name,
+                        'nickname' => $player->nickname,
+                        'position' => $player->position
+                    ],
+                    'statistics' => [
+                        'goals' => $matchPlayer->goals,
+                        'assists' => $matchPlayer->assists,
+                        'is_winner' => $matchPlayer->is_winner,
+                        'goal_participation' => $matchPlayer->goals + $matchPlayer->assists
+                    ]
+                ];
+
+                // Adiciona gols sofridos apenas para goleiros
+                if ($player->position === 'goleiro') {
+                    $stats['statistics']['goals_conceded'] = $matchPlayer->goals_conceded;
+                }
+
+                return $stats;
+            });
+
+        // Separa jogadores por posição
+        $fieldPlayers = $statistics->filter(function ($stat) {
+            return $stat['player']['position'] === 'linha';
+        })->values();
+
+        $goalkeepers = $statistics->filter(function ($stat) {
+            return $stat['player']['position'] === 'goleiro';
+        })->values();
+
+        return response()->json([
+            'pelada' => [
+                'id' => $pelada->id,
+                'date' => $pelada->date,
+                'location' => $pelada->location,
+                'qtd_times' => $pelada->qtd_times,
+                'qtd_jogadores_por_time' => $pelada->qtd_jogadores_por_time,
+                'qtd_goleiros' => $pelada->qtd_goleiros
+            ],
+            'statistics' => [
+                'field_players' => $fieldPlayers,
+                'goalkeepers' => $goalkeepers,
+                'total_players' => $statistics->count(),
+                'total_goals' => $statistics->sum('statistics.goals'),
+                'total_assists' => $statistics->sum('statistics.assists'),
+                'winners_count' => $statistics->where('statistics.is_winner', true)->count()
+            ]
+        ]);
+    }
 }
 

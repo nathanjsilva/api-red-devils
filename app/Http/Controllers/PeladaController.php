@@ -40,6 +40,19 @@ class PeladaController extends Controller
         return new PeladaResource($pelada);
     }
 
+    public function getByDate($date)
+    {
+        $peladas = Pelada::whereDate('date', $date)
+            ->with('players')
+            ->get();
+
+        if ($peladas->isEmpty()) {
+            return response()->json(['message' => 'Nenhuma pelada encontrada para esta data.'], 404);
+        }
+
+        return PeladaResource::collection($peladas);
+    }
+
     public function update(UpdatePeladaRequest $request, $id)
     {
         $pelada = Pelada::find($id);
