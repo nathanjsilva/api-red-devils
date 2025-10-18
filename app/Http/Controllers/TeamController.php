@@ -102,18 +102,17 @@ class TeamController extends Controller
             return response()->json(['message' => 'Times já foram organizados para esta pelada.'], 400);
         }
 
-        // Verifica se todos os jogadores participaram da pelada
-        $peladaPlayerIds = MatchPlayer::where('pelada_id', $peladaId)->pluck('player_id')->toArray();
+        // Verifica se todos os jogadores existem no sistema
         $assignedPlayerIds = [];
-        
         foreach ($request->team_assignments as $assignment) {
             $assignedPlayerIds = array_merge($assignedPlayerIds, $assignment['player_ids']);
         }
 
-        $invalidPlayers = array_diff($assignedPlayerIds, $peladaPlayerIds);
+        $existingPlayerIds = Player::whereIn('id', $assignedPlayerIds)->pluck('id')->toArray();
+        $invalidPlayers = array_diff($assignedPlayerIds, $existingPlayerIds);
         if (!empty($invalidPlayers)) {
             return response()->json([
-                'message' => 'Alguns jogadores não participaram desta pelada.',
+                'message' => 'Alguns jogadores não existem no sistema.',
                 'invalid_players' => $invalidPlayers
             ], 400);
         }
