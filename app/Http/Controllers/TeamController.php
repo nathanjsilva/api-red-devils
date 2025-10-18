@@ -43,39 +43,40 @@ class TeamController extends Controller
         ]);
     }
 
-    /**
-     * Retorna os jogadores que participaram de uma pelada específica.
-     */
-    public function getPeladaPlayers($peladaId)
-    {
-        $pelada = Pelada::find($peladaId);
-        if (!$pelada) {
-            return response()->json(['message' => 'Pelada não encontrada.'], 404);
-        }
+	/**
+	 * Retorna os jogadores cadastrados no sistema que NÃO estão na pelada.
+	 */
+	public function getPeladaPlayers($peladaId)
+	{
+		$pelada = Pelada::find($peladaId);
+		if (!$pelada) {
+			return response()->json(['message' => 'Pelada não encontrada.'], 404);
+		}
 
-        $players = MatchPlayer::where('pelada_id', $peladaId)
-            ->with('player')
-            ->get()
-            ->map(function ($matchPlayer) {
-                return [
-                    'id' => $matchPlayer->player->id,
-                    'name' => $matchPlayer->player->name,
-                    'nickname' => $matchPlayer->player->nickname,
-                    'position' => $matchPlayer->player->position,
-                    'phone' => $matchPlayer->player->phone,
-                    'is_goalkeeper' => $matchPlayer->player->position === 'goleiro'
-                ];
-            });
+		$peladaPlayerIds = MatchPlayer::where('pelada_id', $peladaId)->pluck('player_id');
 
-        return response()->json([
-            'pelada' => [
-                'id' => $pelada->id,
-                'date' => $pelada->date,
-                'location' => $pelada->location
-            ],
-            'players' => $players
-        ]);
-    }
+		$players = Player::when($peladaPlayerIds->isNotEmpty(), function ($query) use ($peladaPlayerIds) {
+			$query->whereNotIn('id', $peladaPlayerIds);
+		})->get()->map(function ($player) {
+			return [
+				'id' => $player->id,
+				'name' => $player->name,
+				'nickname' => $player->nickname,
+				'position' => $player->position,
+				'phone' => $player->phone,
+				'is_goalkeeper' => $player->position === 'goleiro'
+			];
+		});
+
+		return response()->json([
+			'pelada' => [
+				'id' => $pelada->id,
+				'date' => $pelada->date,
+				'location' => $pelada->location
+			],
+			'players' => $players
+		]);
+	}
 
     /**
      * Organiza jogadores nos times da pelada.
