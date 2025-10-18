@@ -135,12 +135,12 @@ class TeamController extends Controller
                     'id' => $team->id,
                     'name' => $team->name,
                     'team_number' => $assignment['team_number'],
-                    'players' => $team->players()->with('player')->get()->map(function ($teamPlayer) {
+                    'players' => $team->players()->get()->map(function ($player) {
                         return [
-                            'id' => $teamPlayer->player->id,
-                            'name' => $teamPlayer->player->name,
-                            'nickname' => $teamPlayer->player->nickname,
-                            'position' => $teamPlayer->player->position
+                            'id' => $player->id,
+                            'name' => $player->name,
+                            'nickname' => $player->nickname,
+                            'position' => $player->position
                         ];
                     })
                 ];
