@@ -13,6 +13,7 @@ class MatchPlayer extends Model
         'assists',
         'goals_conceded',
         'is_winner',
+        'result',
     ];
 
     public function player()

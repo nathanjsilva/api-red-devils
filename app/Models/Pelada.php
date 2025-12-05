@@ -25,7 +25,7 @@ class Pelada extends Model
     public function players()
     {
         return $this->belongsToMany(Player::class, 'match_players')
-                    ->withPivot('goals', 'assists', 'is_winner', 'goals_conceded')
+                    ->withPivot('goals', 'assists', 'is_winner', 'result', 'goals_conceded')
                     ->withTimestamps();
     }
 

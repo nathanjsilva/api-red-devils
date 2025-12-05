@@ -198,4 +198,73 @@ class TeamController extends Controller
             'teams' => $teams
         ]);
     }
+
+    /**
+     * Retorna os jogadores de uma pelada organizados por times com suas estatísticas.
+     */
+    public function getPeladaPlayersWithStatistics($peladaId)
+    {
+        $pelada = Pelada::find($peladaId);
+        if (!$pelada) {
+            return response()->json(['message' => 'Pelada não encontrada.'], 404);
+        }
+
+        // Busca todos os times da pelada com seus jogadores
+        $teams = Team::where('pelada_id', $peladaId)
+            ->with(['players'])
+            ->get();
+
+        // Busca todas as estatísticas dos jogadores nesta pelada
+        $matchPlayers = MatchPlayer::where('pelada_id', $peladaId)
+            ->with('player')
+            ->get()
+            ->keyBy('player_id');
+
+        // Organiza os times com jogadores e estatísticas
+        $teamsWithPlayers = $teams->map(function ($team) use ($matchPlayers) {
+            return [
+                'id' => $team->id,
+                'name' => $team->name,
+                'players' => $team->players->map(function ($player) use ($matchPlayers) {
+                    $matchPlayer = $matchPlayers->get($player->id);
+                    
+                    $playerData = [
+                        'id' => $player->id,
+                        'name' => $player->name,
+                        'nickname' => $player->nickname,
+                        'position' => $player->position,
+                        'phone' => $player->phone,
+                    ];
+
+                    // Adiciona estatísticas se existirem
+                    if ($matchPlayer) {
+                        $playerData['statistics'] = [
+                            'goals' => $matchPlayer->goals,
+                            'assists' => $matchPlayer->assists,
+                            'goals_conceded' => $matchPlayer->goals_conceded,
+                            'is_winner' => $matchPlayer->is_winner,
+                            'result' => $matchPlayer->result ?? ($matchPlayer->is_winner ? 'win' : 'loss'),
+                            'goal_participation' => $matchPlayer->goals + $matchPlayer->assists,
+                        ];
+                    } else {
+                        $playerData['statistics'] = null;
+                    }
+
+                    return $playerData;
+                })
+            ];
+        });
+
+        return response()->json([
+            'pelada' => [
+                'id' => $pelada->id,
+                'date' => $pelada->date,
+                'location' => $pelada->location,
+                'qtd_times' => $pelada->qtd_times,
+                'qtd_jogadores_por_time' => $pelada->qtd_jogadores_por_time,
+                'qtd_goleiros' => $pelada->qtd_goleiros
+            ],
+            'teams' => $teamsWithPlayers
+        ]);
+    }
 }

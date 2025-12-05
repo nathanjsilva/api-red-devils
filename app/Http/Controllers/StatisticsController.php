@@ -41,6 +41,7 @@ class StatisticsController extends Controller
                 'assists' => $statistics->assists,
                 'goals_conceded' => $statistics->goals_conceded,
                 'is_winner' => $statistics->is_winner,
+                'result' => $statistics->result ?? ($statistics->is_winner ? 'win' : 'loss'),
                 'goal_participation' => $statistics->goals + $statistics->assists,
             ]
         ]);
@@ -62,7 +63,9 @@ class StatisticsController extends Controller
                                     SUM(assists) as total_assists,
                                     SUM(goals_conceded) as total_goals_conceded,
                                     COUNT(*) as total_matches,
-                                    SUM(CASE WHEN is_winner = 1 THEN 1 ELSE 0 END) as total_wins,
+                                    SUM(CASE WHEN result = "win" OR (result IS NULL AND is_winner = 1) THEN 1 ELSE 0 END) as total_wins,
+                                    SUM(CASE WHEN result = "loss" OR (result IS NULL AND is_winner = 0) THEN 1 ELSE 0 END) as total_losses,
+                                    SUM(CASE WHEN result = "draw" THEN 1 ELSE 0 END) as total_draws,
                                     AVG(goals + assists) as avg_goal_participation
                                 ')
                                 ->first();
@@ -75,6 +78,8 @@ class StatisticsController extends Controller
                 'total_goals_conceded' => $statistics->total_goals_conceded ?? 0,
                 'total_matches' => $statistics->total_matches ?? 0,
                 'total_wins' => $statistics->total_wins ?? 0,
+                'total_losses' => $statistics->total_losses ?? 0,
+                'total_draws' => $statistics->total_draws ?? 0,
                 'win_rate' => $statistics->total_matches > 0 ? round(($statistics->total_wins / $statistics->total_matches) * 100, 2) : 0,
                 'avg_goal_participation' => round($statistics->avg_goal_participation ?? 0, 2),
             ]
@@ -89,8 +94,10 @@ class StatisticsController extends Controller
         $ranking = MatchPlayer::selectRaw('
                 player_id,
                 COUNT(*) as total_matches,
-                SUM(CASE WHEN is_winner = 1 THEN 1 ELSE 0 END) as total_wins,
-                ROUND((SUM(CASE WHEN is_winner = 1 THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as win_rate
+                SUM(CASE WHEN result = "win" OR (result IS NULL AND is_winner = 1) THEN 1 ELSE 0 END) as total_wins,
+                SUM(CASE WHEN result = "loss" OR (result IS NULL AND is_winner = 0) THEN 1 ELSE 0 END) as total_losses,
+                SUM(CASE WHEN result = "draw" THEN 1 ELSE 0 END) as total_draws,
+                ROUND((SUM(CASE WHEN result = "win" OR (result IS NULL AND is_winner = 1) THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as win_rate
             ')
             ->groupBy('player_id')
             ->having('total_matches', '>', 0)
@@ -105,6 +112,8 @@ class StatisticsController extends Controller
                 return [
                     'player' => $item->player,
                     'total_wins' => $item->total_wins,
+                    'total_losses' => $item->total_losses,
+                    'total_draws' => $item->total_draws,
                     'total_matches' => $item->total_matches,
                     'win_rate' => $item->win_rate . '%'
                 ];
@@ -265,6 +274,7 @@ class StatisticsController extends Controller
                         'goals' => $matchPlayer->goals,
                         'assists' => $matchPlayer->assists,
                         'is_winner' => $matchPlayer->is_winner,
+                        'result' => $matchPlayer->result ?? ($matchPlayer->is_winner ? 'win' : 'loss'),
                         'goal_participation' => $matchPlayer->goals + $matchPlayer->assists
                     ]
                 ];
@@ -301,7 +311,13 @@ class StatisticsController extends Controller
                 'total_players' => $statistics->count(),
                 'total_goals' => $statistics->sum('statistics.goals'),
                 'total_assists' => $statistics->sum('statistics.assists'),
-                'winners_count' => $statistics->where('statistics.is_winner', true)->count()
+                'winners_count' => $statistics->filter(function ($stat) {
+                    return $stat['statistics']['result'] === 'win' || 
+                           ($stat['statistics']['result'] === null && $stat['statistics']['is_winner'] === true);
+                })->count(),
+                'draws_count' => $statistics->filter(function ($stat) {
+                    return $stat['statistics']['result'] === 'draw';
+                })->count()
             ]
         ]);
     }

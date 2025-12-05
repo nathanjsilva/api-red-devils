@@ -28,6 +28,7 @@ class StoreMatchPlayerRequest extends FormRequest
             'goals'          => 'nullable|integer|min:0',
             'assists'        => 'nullable|integer|min:0',
             'is_winner'      => 'nullable|boolean',
+            'result'         => 'nullable|in:win,loss,draw',
             'goals_conceded' => 'nullable|integer|min:0',
         ];
     }
@@ -49,6 +50,7 @@ class StoreMatchPlayerRequest extends FormRequest
             'assists.integer'    => 'Assistências deve ser um número inteiro.',
             'assists.min'        => 'Assistências não pode ser negativo.',
             'is_winner.boolean'  => 'Status de vencedor deve ser verdadeiro ou falso.',
+            'result.in'          => 'Resultado deve ser: win, loss ou draw.',
             'goals_conceded.integer' => 'Gols sofridos deve ser um número inteiro.',
             'goals_conceded.min'     => 'Gols sofridos não pode ser negativo.',
         ];

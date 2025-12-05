@@ -59,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('pelada/{peladaId}/fields', [TeamController::class, 'getTeamFields']);
         Route::get('pelada/{peladaId}/players', [TeamController::class, 'getPeladaPlayers']);
         Route::get('pelada/{peladaId}/organized', [TeamController::class, 'getPeladaTeams']);
+        Route::get('pelada/{peladaId}/players-with-statistics', [TeamController::class, 'getPeladaPlayersWithStatistics']);
         Route::post('pelada/{peladaId}/organize', [TeamController::class, 'organizePlayers']);
     });
     

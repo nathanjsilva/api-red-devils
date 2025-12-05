@@ -47,7 +47,7 @@ class Player extends Authenticatable
     public function peladas()
     {
         return $this->belongsToMany(Pelada::class, 'match_players')
-                    ->withPivot('goals', 'assists', 'is_winner', 'goals_conceded')
+                    ->withPivot('goals', 'assists', 'is_winner', 'result', 'goals_conceded')
                     ->withTimestamps();
     }
 }
