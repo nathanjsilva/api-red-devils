@@ -221,13 +221,37 @@ class TeamController extends Controller
             ->with('players')
             ->get();
 
-        // Busca as associações entre jogadores e times através de join
-        $teamPlayers = DB::table('team_players')
-            ->join('teams', 'team_players.team_id', '=', 'teams.id')
-            ->where('teams.pelada_id', $peladaId)
-            ->select('team_players.player_id', 'teams.id as team_id', 'teams.name as team_name')
-            ->get()
-            ->keyBy('player_id');
+        // Busca os IDs dos jogadores que participaram da pelada
+        $playerIds = $matchPlayers->keys()->toArray();
+
+        // Busca todas as associações team_players dos jogadores que participaram da pelada
+        // Usa LEFT JOIN para pegar os team_players mesmo que os times não existam mais
+        $teamPlayersData = DB::table('team_players')
+            ->leftJoin('teams', 'team_players.team_id', '=', 'teams.id')
+            ->whereIn('team_players.player_id', $playerIds)
+            ->select(
+                'team_players.player_id',
+                'team_players.team_id',
+                'teams.name as team_name',
+                'teams.pelada_id'
+            )
+            ->get();
+
+        // Organiza os dados: prioriza times que pertencem à pelada, depois os outros
+        $teamPlayers = collect();
+        
+        foreach ($teamPlayersData as $item) {
+            $playerId = $item->player_id;
+            
+            // Se já não temos esse jogador ou se este time pertence à pelada
+            if (!$teamPlayers->has($playerId) || $item->pelada_id == $peladaId) {
+                $teamPlayers->put($playerId, (object) [
+                    'player_id' => $playerId,
+                    'team_id' => $item->team_id,
+                    'team_name' => $item->team_name ?? ($item->team_id ? "Time {$item->team_id}" : null),
+                ]);
+            }
+        }
 
         // Se não houver times organizados, retorna os jogadores sem organização por times
         if ($teams->isEmpty()) {
