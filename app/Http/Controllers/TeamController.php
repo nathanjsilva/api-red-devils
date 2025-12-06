@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Pelada;
 use App\Models\Player;
 use App\Models\Team;
+use App\Models\TeamPlayer;
 use App\Models\MatchPlayer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -220,11 +221,21 @@ class TeamController extends Controller
             ->with('players')
             ->get();
 
+        // Busca as associações entre jogadores e times através de join
+        $teamPlayers = DB::table('team_players')
+            ->join('teams', 'team_players.team_id', '=', 'teams.id')
+            ->where('teams.pelada_id', $peladaId)
+            ->select('team_players.player_id', 'teams.id as team_id', 'teams.name as team_name')
+            ->get()
+            ->keyBy('player_id');
+
         // Se não houver times organizados, retorna os jogadores sem organização por times
         if ($teams->isEmpty()) {
-            $playersWithStats = $matchPlayers->map(function ($matchPlayer) {
+            $playersWithStats = $matchPlayers->map(function ($matchPlayer) use ($teamPlayers) {
                 $player = $matchPlayer->player;
-                return [
+                $teamPlayer = $teamPlayers->get($player->id);
+                
+                $playerData = [
                     'id' => $player->id,
                     'name' => $player->name,
                     'nickname' => $player->nickname,
@@ -239,6 +250,18 @@ class TeamController extends Controller
                         'goal_participation' => $matchPlayer->goals + $matchPlayer->assists,
                     ]
                 ];
+
+                // Adiciona informação do time se existir
+                if ($teamPlayer) {
+                    $playerData['team'] = [
+                        'id' => $teamPlayer->team_id,
+                        'name' => $teamPlayer->team_name,
+                    ];
+                } else {
+                    $playerData['team'] = null;
+                }
+
+                return $playerData;
             })->values();
 
             return response()->json([
