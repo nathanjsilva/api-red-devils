@@ -209,18 +209,53 @@ class TeamController extends Controller
             return response()->json(['message' => 'Pelada não encontrada.'], 404);
         }
 
-        // Busca todos os times da pelada com seus jogadores
-        $teams = Team::where('pelada_id', $peladaId)
-            ->with(['players'])
-            ->get();
-
         // Busca todas as estatísticas dos jogadores nesta pelada
         $matchPlayers = MatchPlayer::where('pelada_id', $peladaId)
             ->with('player')
             ->get()
             ->keyBy('player_id');
 
-        // Organiza os times com jogadores e estatísticas
+        // Busca todos os times da pelada com seus jogadores
+        $teams = Team::where('pelada_id', $peladaId)
+            ->with('players')
+            ->get();
+
+        // Se não houver times organizados, retorna os jogadores sem organização por times
+        if ($teams->isEmpty()) {
+            $playersWithStats = $matchPlayers->map(function ($matchPlayer) {
+                $player = $matchPlayer->player;
+                return [
+                    'id' => $player->id,
+                    'name' => $player->name,
+                    'nickname' => $player->nickname,
+                    'position' => $player->position,
+                    'phone' => $player->phone,
+                    'statistics' => [
+                        'goals' => $matchPlayer->goals,
+                        'assists' => $matchPlayer->assists,
+                        'goals_conceded' => $matchPlayer->goals_conceded,
+                        'is_winner' => $matchPlayer->is_winner,
+                        'result' => $matchPlayer->result ?? ($matchPlayer->is_winner ? 'win' : 'loss'),
+                        'goal_participation' => $matchPlayer->goals + $matchPlayer->assists,
+                    ]
+                ];
+            })->values();
+
+            return response()->json([
+                'pelada' => [
+                    'id' => $pelada->id,
+                    'date' => $pelada->date,
+                    'location' => $pelada->location,
+                    'qtd_times' => $pelada->qtd_times,
+                    'qtd_jogadores_por_time' => $pelada->qtd_jogadores_por_time,
+                    'qtd_goleiros' => $pelada->qtd_goleiros
+                ],
+                'teams' => [],
+                'players' => $playersWithStats
+            ]);
+        }
+
+        // Se houver times organizados, retorna organizado por times
         $teamsWithPlayers = $teams->map(function ($team) use ($matchPlayers) {
             return [
                 'id' => $team->id,
