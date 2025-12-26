@@ -140,16 +140,68 @@ class AdminController extends Controller
     }
 
     /**
-     * Atualiza estatísticas de um jogador em uma pelada.
+     * Atualiza estatísticas de um jogador em uma pelada pelo ID do registro.
+     * 
+     * PUT /admin/match-players/{id} - Atualiza pelo ID do registro MatchPlayer
      */
     public function updateMatchPlayer(UpdateMatchPlayerRequest $request, $id)
     {
-        $matchPlayer = MatchPlayer::find($id);
+        $matchPlayer = MatchPlayer::with(['player', 'pelada'])->find($id);
         if (!$matchPlayer) {
             return response()->json(['message' => 'Registro não encontrado.'], 404);
         }
 
         $matchPlayer->update($request->validated());
+        
+        // Recarregar o modelo com relacionamentos para a resposta
+        $matchPlayer->refresh();
+        $matchPlayer->load(['player', 'pelada']);
+        
+        return new MatchPlayerResource($matchPlayer);
+    }
+
+    /**
+     * Atualiza ou cria estatísticas de um jogador em uma pelada.
+     * 
+     * PUT /admin/peladas/{peladaId}/players/{playerId}/statistics
+     * 
+     * Esta rota é mais intuitiva: você informa qual pelada e qual jogador,
+     * e o sistema encontra ou cria o registro de estatísticas.
+     * 
+     * @param UpdateMatchPlayerRequest $request
+     * @param int $peladaId ID da pelada
+     * @param int $playerId ID do jogador
+     * @return MatchPlayerResource
+     */
+    public function updateMatchPlayerByPlayerAndPelada(UpdateMatchPlayerRequest $request, $peladaId, $playerId)
+    {
+        // Verificar se a pelada existe
+        $pelada = Pelada::find($peladaId);
+        if (!$pelada) {
+            return response()->json(['message' => 'Pelada não encontrada.'], 404);
+        }
+
+        // Verificar se o jogador existe
+        $player = Player::find($playerId);
+        if (!$player) {
+            return response()->json(['message' => 'Jogador não encontrado.'], 404);
+        }
+
+        $validated = $request->validated();
+        
+        // Remover player_id e pelada_id se foram enviados (usamos os da URL)
+        unset($validated['player_id'], $validated['pelada_id']);
+        
+        // Usar updateOrCreate para encontrar ou criar o registro
+        $matchPlayer = MatchPlayer::updateOrCreate(
+            [
+                'player_id' => $playerId,
+                'pelada_id' => $peladaId
+            ],
+            $validated
+        );
+        
+        $matchPlayer->load(['player', 'pelada']);
         return new MatchPlayerResource($matchPlayer);
     }
 

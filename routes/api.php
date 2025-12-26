@@ -78,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Estatísticas
         Route::post('match-players', [AdminController::class, 'storeMatchPlayer']);
         Route::put('match-players/{id}', [AdminController::class, 'updateMatchPlayer']);
+        // Rota alternativa: atualizar/criar estatísticas por player_id e pelada_id
+        Route::put('peladas/{peladaId}/players/{playerId}/statistics', [AdminController::class, 'updateMatchPlayerByPlayerAndPelada']);
         Route::delete('match-players/{id}', [AdminController::class, 'deleteMatchPlayer']);
         
         // Organização de times
