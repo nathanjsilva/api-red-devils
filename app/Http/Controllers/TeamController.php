@@ -5,16 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Pelada;
 use App\Models\Player;
 use App\Models\Team;
-use App\Models\TeamPlayer;
 use App\Models\MatchPlayer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TeamController extends Controller
 {
-    /**
-     * Retorna os campos dos times baseado na quantidade de times da pelada.
-     */
     public function getTeamFields($peladaId)
     {
         $pelada = Pelada::find($peladaId);
@@ -44,9 +40,6 @@ class TeamController extends Controller
         ]);
     }
 
-	/**
-	 * Retorna os jogadores cadastrados no sistema que NÃO estão na pelada.
-	 */
 	public function getPeladaPlayers($peladaId)
 	{
 		$pelada = Pelada::find($peladaId);
@@ -79,9 +72,6 @@ class TeamController extends Controller
 		]);
 	}
 
-    /**
-     * Organiza jogadores nos times da pelada.
-     */
     public function organizePlayers(Request $request, $peladaId)
     {
         $pelada = Pelada::find($peladaId);
@@ -97,13 +87,13 @@ class TeamController extends Controller
             'team_assignments.*.player_ids.*' => 'exists:players,id'
         ]);
 
-        // Verifica se os times já foram organizados
-        $existingTeams = Team::where('pelada_id', $peladaId)->count();
-        if ($existingTeams > 0) {
-            return response()->json(['message' => 'Times já foram organizados para esta pelada.'], 400);
+        $existingTeams = Team::where('pelada_id', $peladaId)->get();
+        if ($existingTeams->count() > 0) {
+            foreach ($existingTeams as $team) {
+                $team->players()->detach();
+                $team->delete();
+            }
         }
-
-        // Verifica se todos os jogadores existem no sistema
         $assignedPlayerIds = [];
         foreach ($request->team_assignments as $assignment) {
             $assignedPlayerIds = array_merge($assignedPlayerIds, $assignment['player_ids']);
@@ -121,7 +111,6 @@ class TeamController extends Controller
         DB::beginTransaction();
         
         try {
-            // Cria os times
             $teams = [];
             foreach ($request->team_assignments as $assignment) {
                 $team = Team::create([
@@ -129,7 +118,6 @@ class TeamController extends Controller
                     'name' => "Time {$assignment['team_number']}"
                 ]);
                 
-                // Adiciona jogadores ao time
                 $team->players()->attach($assignment['player_ids']);
                 
                 $teams[] = [
@@ -160,9 +148,6 @@ class TeamController extends Controller
         }
     }
 
-    /**
-     * Retorna times organizados de uma pelada.
-     */
     public function getPeladaTeams($peladaId)
     {
         $pelada = Pelada::find($peladaId);
@@ -200,9 +185,6 @@ class TeamController extends Controller
         ]);
     }
 
-    /**
-     * Retorna os jogadores de uma pelada organizados por times com suas estatísticas.
-     */
     public function getPeladaPlayersWithStatistics($peladaId)
     {
         $pelada = Pelada::find($peladaId);
@@ -210,22 +192,17 @@ class TeamController extends Controller
             return response()->json(['message' => 'Pelada não encontrada.'], 404);
         }
 
-        // Busca todas as estatísticas dos jogadores nesta pelada
         $matchPlayers = MatchPlayer::where('pelada_id', $peladaId)
             ->with('player')
             ->get()
             ->keyBy('player_id');
 
-        // Busca todos os times da pelada com seus jogadores
         $teams = Team::where('pelada_id', $peladaId)
             ->with('players')
             ->get();
 
-        // Busca os IDs dos jogadores que participaram da pelada
         $playerIds = $matchPlayers->keys()->toArray();
 
-        // Busca todas as associações team_players dos jogadores que participaram da pelada
-        // Usa LEFT JOIN para pegar os team_players mesmo que os times não existam mais
         $teamPlayersData = DB::table('team_players')
             ->leftJoin('teams', 'team_players.team_id', '=', 'teams.id')
             ->whereIn('team_players.player_id', $playerIds)
@@ -237,13 +214,11 @@ class TeamController extends Controller
             )
             ->get();
 
-        // Organiza os dados: prioriza times que pertencem à pelada, depois os outros
         $teamPlayers = collect();
         
         foreach ($teamPlayersData as $item) {
             $playerId = $item->player_id;
             
-            // Se já não temos esse jogador ou se este time pertence à pelada
             if (!$teamPlayers->has($playerId) || $item->pelada_id == $peladaId) {
                 $teamPlayers->put($playerId, (object) [
                     'player_id' => $playerId,
@@ -252,8 +227,6 @@ class TeamController extends Controller
                 ]);
             }
         }
-
-        // Se não houver times organizados, retorna os jogadores sem organização por times
         if ($teams->isEmpty()) {
             $playersWithStats = $matchPlayers->map(function ($matchPlayer) use ($teamPlayers) {
                 $player = $matchPlayer->player;
@@ -275,7 +248,6 @@ class TeamController extends Controller
                     ]
                 ];
 
-                // Adiciona informação do time se existir
                 if ($teamPlayer) {
                     $playerData['team'] = [
                         'id' => $teamPlayer->team_id,
@@ -302,7 +274,6 @@ class TeamController extends Controller
             ]);
         }
 
-        // Se houver times organizados, retorna organizado por times
         $teamsWithPlayers = $teams->map(function ($team) use ($matchPlayers) {
             return [
                 'id' => $team->id,
@@ -318,7 +289,6 @@ class TeamController extends Controller
                         'phone' => $player->phone,
                     ];
 
-                    // Adiciona estatísticas se existirem
                     if ($matchPlayer) {
                         $playerData['statistics'] = [
                             'goals' => $matchPlayer->goals,

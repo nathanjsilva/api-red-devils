@@ -19,12 +19,8 @@ use Illuminate\Http\Request;
 
 class AdminController extends Controller
 {
-    /**
-     * Cria o primeiro administrador do sistema (apenas se não existir nenhum admin).
-     */
     public function setupFirstAdmin(Request $request)
     {
-        // Verifica se já existe algum admin
         $adminExists = Player::where('is_admin', true)->exists();
         if ($adminExists) {
             return response()->json([
@@ -56,18 +52,12 @@ class AdminController extends Controller
             'player' => new PlayerResource($player)
         ], 201);
     }
-    /**
-     * Cadastra um jogador (admin - email não obrigatório).
-     */
     public function storePlayer(AdminStorePlayerRequest $request)
     {
         $player = Player::create($request->validated());
         return new PlayerResource($player);
     }
 
-    /**
-     * Atualiza um jogador.
-     */
     public function updatePlayer(UpdatePlayerRequest $request, $id)
     {
         $player = Player::find($id);
@@ -79,9 +69,6 @@ class AdminController extends Controller
         return new PlayerResource($player);
     }
 
-    /**
-     * Remove um jogador.
-     */
     public function deletePlayer($id)
     {
         $player = Player::find($id);
@@ -93,18 +80,12 @@ class AdminController extends Controller
         return response()->json(['message' => 'Jogador deletado com sucesso.']);
     }
 
-    /**
-     * Cadastra uma pelada.
-     */
     public function storePelada(StorePeladaRequest $request)
     {
         $pelada = Pelada::create($request->validated());
         return new PeladaResource($pelada);
     }
 
-    /**
-     * Atualiza uma pelada.
-     */
     public function updatePelada(UpdatePeladaRequest $request, $id)
     {
         $pelada = Pelada::find($id);
@@ -116,9 +97,6 @@ class AdminController extends Controller
         return new PeladaResource($pelada);
     }
 
-    /**
-     * Remove uma pelada.
-     */
     public function deletePelada($id)
     {
         $pelada = Pelada::find($id);
@@ -130,20 +108,12 @@ class AdminController extends Controller
         return response()->json(['message' => 'Pelada deletada com sucesso.']);
     }
 
-    /**
-     * Cadastra estatísticas de um jogador em uma pelada.
-     */
     public function storeMatchPlayer(StoreMatchPlayerRequest $request)
     {
         $matchPlayer = MatchPlayer::create($request->validated());
         return new MatchPlayerResource($matchPlayer);
     }
 
-    /**
-     * Atualiza estatísticas de um jogador em uma pelada pelo ID do registro.
-     * 
-     * PUT /admin/match-players/{id} - Atualiza pelo ID do registro MatchPlayer
-     */
     public function updateMatchPlayer(UpdateMatchPlayerRequest $request, $id)
     {
         $matchPlayer = MatchPlayer::with(['player', 'pelada'])->find($id);
@@ -152,47 +122,27 @@ class AdminController extends Controller
         }
 
         $matchPlayer->update($request->validated());
-        
-        // Recarregar o modelo com relacionamentos para a resposta
         $matchPlayer->refresh();
         $matchPlayer->load(['player', 'pelada']);
         
         return new MatchPlayerResource($matchPlayer);
     }
 
-    /**
-     * Atualiza ou cria estatísticas de um jogador em uma pelada.
-     * 
-     * PUT /admin/peladas/{peladaId}/players/{playerId}/statistics
-     * 
-     * Esta rota é mais intuitiva: você informa qual pelada e qual jogador,
-     * e o sistema encontra ou cria o registro de estatísticas.
-     * 
-     * @param UpdateMatchPlayerRequest $request
-     * @param int $peladaId ID da pelada
-     * @param int $playerId ID do jogador
-     * @return MatchPlayerResource
-     */
     public function updateMatchPlayerByPlayerAndPelada(UpdateMatchPlayerRequest $request, $peladaId, $playerId)
     {
-        // Verificar se a pelada existe
         $pelada = Pelada::find($peladaId);
         if (!$pelada) {
             return response()->json(['message' => 'Pelada não encontrada.'], 404);
         }
 
-        // Verificar se o jogador existe
         $player = Player::find($playerId);
         if (!$player) {
             return response()->json(['message' => 'Jogador não encontrado.'], 404);
         }
 
         $validated = $request->validated();
-        
-        // Remover player_id e pelada_id se foram enviados (usamos os da URL)
         unset($validated['player_id'], $validated['pelada_id']);
         
-        // Usar updateOrCreate para encontrar ou criar o registro
         $matchPlayer = MatchPlayer::updateOrCreate(
             [
                 'player_id' => $playerId,
@@ -205,9 +155,6 @@ class AdminController extends Controller
         return new MatchPlayerResource($matchPlayer);
     }
 
-    /**
-     * Remove estatísticas de um jogador em uma pelada.
-     */
     public function deleteMatchPlayer($id)
     {
         $matchPlayer = MatchPlayer::find($id);
@@ -219,9 +166,6 @@ class AdminController extends Controller
         return response()->json(['message' => 'Registro removido com sucesso.']);
     }
 
-    /**
-     * Organiza times automaticamente para uma pelada.
-     */
     public function organizeTeams(Request $request, $peladaId)
     {
         $pelada = Pelada::find($peladaId);
@@ -234,22 +178,22 @@ class AdminController extends Controller
             'player_ids.*' => 'exists:players,id'
         ]);
 
-        // Verifica se os jogadores já estão organizados
-        $existingTeams = Team::where('pelada_id', $peladaId)->count();
-        if ($existingTeams > 0) {
-            return response()->json(['message' => 'Times já foram organizados para esta pelada.'], 400);
+        $existingTeams = Team::where('pelada_id', $peladaId)->get();
+        if ($existingTeams->count() > 0) {
+            foreach ($existingTeams as $team) {
+                $team->players()->detach();
+                $team->delete();
+            }
         }
 
         $players = Player::whereIn('id', $request->player_ids)->get();
         $goalkeepers = $players->where('position', 'goleiro');
         $fieldPlayers = $players->where('position', 'linha');
 
-        // Verifica se há goleiros suficientes
         if ($goalkeepers->count() < $pelada->qtd_goleiros) {
             return response()->json(['message' => 'Número insuficiente de goleiros.'], 400);
         }
 
-        // Cria os times
         $teams = [];
         for ($i = 1; $i <= $pelada->qtd_times; $i++) {
             $team = Team::create([
@@ -259,11 +203,9 @@ class AdminController extends Controller
             $teams[] = $team;
         }
 
-        // Converte collections para arrays para facilitar manipulação
         $goalkeepersArray = $goalkeepers->values()->all();
         $fieldPlayersArray = $fieldPlayers->values()->all();
 
-        // Distribui goleiros
         $goalkeeperIndex = 0;
         foreach ($teams as $team) {
             $goalkeepersNeeded = min(2, count($goalkeepersArray) - $goalkeeperIndex);
@@ -273,7 +215,6 @@ class AdminController extends Controller
             }
         }
 
-        // Distribui jogadores de linha
         $fieldPlayerIndex = 0;
         $playersPerTeam = floor(count($fieldPlayersArray) / $pelada->qtd_times);
         
@@ -284,7 +225,6 @@ class AdminController extends Controller
             }
         }
 
-        // Carrega os times com seus jogadores para retorno
         $teamsWithPlayers = Team::where('pelada_id', $peladaId)->with('players')->get();
 
         return response()->json([
@@ -299,9 +239,6 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Transforma um jogador em admin.
-     */
     public function makeAdmin($id)
     {
         $player = Player::find($id);
@@ -317,9 +254,6 @@ class AdminController extends Controller
         ]);
     }
 
-    /**
-     * Remove permissões de admin de um jogador.
-     */
     public function removeAdmin($id)
     {
         $player = Player::find($id);
@@ -327,7 +261,6 @@ class AdminController extends Controller
             return response()->json(['message' => 'Jogador não encontrado.'], 404);
         }
 
-        // Verifica se não é o último admin
         $adminCount = Player::where('is_admin', true)->count();
         if ($adminCount <= 1 && $player->is_admin) {
             return response()->json([

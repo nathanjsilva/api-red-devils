@@ -9,9 +9,6 @@ use Illuminate\Support\Facades\DB;
 
 class StatisticsController extends Controller
 {
-    /**
-     * Obtém estatísticas de um jogador em uma pelada específica.
-     */
     public function playerInPelada($playerId, $peladaId)
     {
         $player = Player::find($playerId);
@@ -47,9 +44,6 @@ class StatisticsController extends Controller
         ]);
     }
 
-    /**
-     * Obtém estatísticas totais de um jogador.
-     */
     public function playerTotalStatistics($playerId)
     {
         $player = Player::find($playerId);
@@ -86,9 +80,6 @@ class StatisticsController extends Controller
         ]);
     }
 
-    /**
-     * Obtém ranking de vitórias.
-     */
     public function winsRanking()
     {
         $ranking = MatchPlayer::selectRaw('
@@ -121,9 +112,6 @@ class StatisticsController extends Controller
         ]);
     }
 
-    /**
-     * Obtém ranking de gols.
-     */
     public function goalsRanking()
     {
         $ranking = MatchPlayer::selectRaw('
@@ -152,9 +140,6 @@ class StatisticsController extends Controller
         ]);
     }
 
-    /**
-     * Obtém ranking de assistências.
-     */
     public function assistsRanking()
     {
         $ranking = MatchPlayer::selectRaw('
@@ -183,9 +168,6 @@ class StatisticsController extends Controller
         ]);
     }
 
-    /**
-     * Obtém ranking de participação em gols (gols + assistências).
-     */
     public function goalParticipationRanking()
     {
         $ranking = MatchPlayer::selectRaw('
@@ -214,9 +196,6 @@ class StatisticsController extends Controller
         ]);
     }
 
-    /**
-     * Obtém ranking de goleiros (gols sofridos).
-     */
     public function goalkeepersRanking()
     {
         $ranking = MatchPlayer::selectRaw('
@@ -230,7 +209,7 @@ class StatisticsController extends Controller
             })
             ->groupBy('player_id')
             ->having('total_matches', '>', 0)
-            ->orderBy('avg_goals_conceded_per_match', 'asc') // Menor média = melhor goleiro
+            ->orderBy('avg_goals_conceded_per_match', 'asc')
             ->orderBy('total_goals_conceded', 'asc')
             ->with('player')
             ->get();
@@ -248,9 +227,6 @@ class StatisticsController extends Controller
         ]);
     }
 
-    /**
-     * Obtém estatísticas de uma pelada específica.
-     */
     public function peladaStatistics($peladaId)
     {
         $pelada = \App\Models\Pelada::find($peladaId);
@@ -279,7 +255,6 @@ class StatisticsController extends Controller
                     ]
                 ];
 
-                // Adiciona gols sofridos apenas para goleiros
                 if ($player->position === 'goleiro') {
                     $stats['statistics']['goals_conceded'] = $matchPlayer->goals_conceded;
                 }
@@ -287,7 +262,6 @@ class StatisticsController extends Controller
                 return $stats;
             });
 
-        // Separa jogadores por posição
         $fieldPlayers = $statistics->filter(function ($stat) {
             return $stat['player']['position'] === 'linha';
         })->values();

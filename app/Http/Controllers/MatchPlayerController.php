@@ -10,15 +10,12 @@ use Illuminate\Http\Request;
 
 class MatchPlayerController extends Controller
 {
-    // Cadastra estatísticas de um jogador em uma pelada
     public function store(StoreMatchPlayerRequest $request)
     {
         $matchPlayer = MatchPlayer::create($request->validated());
-
         return new MatchPlayerResource($matchPlayer);
     }
 
-    // Atualiza estatísticas de um jogador em uma pelada
     public function update(UpdateMatchPlayerRequest $request, $id)
     {
         $matchPlayer = MatchPlayer::find($id);
@@ -28,11 +25,9 @@ class MatchPlayerController extends Controller
         }
 
         $matchPlayer->update($request->validated());
-
         return new MatchPlayerResource($matchPlayer);
     }
 
-    // Remove o registro de estatísticas de um jogador em uma pelada
     public function destroy($id)
     {
         $matchPlayer = MatchPlayer::find($id);
