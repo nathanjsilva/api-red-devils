@@ -32,6 +32,7 @@ class UpdatePlayerRequest extends FormRequest
             'phone'    => ['sometimes', 'string', Rule::unique('players')->ignore($playerId)],
             'nickname' => 'sometimes|string|max:255|unique:players,nickname,' . $playerId,
             'is_admin' => 'sometimes|boolean',
+            'user_id'  => ['sometimes', 'nullable', 'exists:users,id', Rule::unique('players')->ignore($playerId)],
         ];
     }
 

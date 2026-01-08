@@ -17,7 +17,7 @@ class AdminMiddleware
     {
         $user = $request->user();
         
-        if (!$user || !$user->isAdmin()) {
+        if (!$user || !($user instanceof \App\Models\User) || !$user->isAdmin()) {
             return response()->json([
                 'message' => 'Acesso negado. Apenas administradores podem acessar esta funcionalidade.'
             ], 403);

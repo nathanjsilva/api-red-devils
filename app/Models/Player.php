@@ -19,6 +19,7 @@ class Player extends Authenticatable
         'phone',
         'nickname',
         'is_admin',
+        'user_id',
     ];
 
     protected $hidden = [
@@ -32,14 +33,17 @@ class Player extends Authenticatable
         'password' => 'hashed',
     ];
 
-    // Métodos helper
     public function isAdmin(): bool
     {
         return $this->is_admin;
     }
 
-    // Relacionamentos
-        public function matchPlayers()
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function matchPlayers()
     {
         return $this->hasMany(MatchPlayer::class);
     }

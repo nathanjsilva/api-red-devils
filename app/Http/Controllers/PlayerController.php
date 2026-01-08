@@ -13,7 +13,7 @@ class PlayerController extends Controller
 {
     public function index()
     {
-        $players = Player::all();
+        $players = Player::whereNotNull('user_id')->get();
         return PlayerResource::collection($players);
     }
 

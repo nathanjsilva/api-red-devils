@@ -3,10 +3,22 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/app/*
+!/storage/app/.gitignore
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/logs/*
+!/storage/logs/.gitignore
 /vendor
 .env
-.env.backup
-.env.production
+.env.*
+!.env.example
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -19,6 +31,8 @@ yarn-error.log
 
 # Docker
 .dockerignore
+docker-compose.override.yml
+*.dockerignore
 
 # OS
 .DS_Store
@@ -28,36 +42,125 @@ yarn-error.log
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
 # Logs
 *.log
+logs/
+*.log.*
 storage/logs/*.log
 
 # Cache
 bootstrap/cache/*
 !bootstrap/cache/.gitignore
+.cache/
+*.cache
 
 # Backup files
 *.sql
 *.sql.gz
+*.sqlite
+*.sqlite3
 backup_*.sql
 backup_*.sql.gz
+*.bak
+*.backup
+*.old
 
 # SSL certificates
 ssl/
 *.pem
 *.key
 *.crt
+*.csr
+*.cert
 
 # Temporary files
 temp_*.json
 *.tmp
+*.temp
+.tmp/
+tmp/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+.fleet/
+*.code-workspace
 
 # Testing
 .phpunit.cache
+/tests/.phpunit.result.cache
+coverage/
+.nyc_output/
+.phpunit.result.cache
+
+# Build & Compilation
+dist/
+build/
+*.min.js
+*.min.css
+*.map
+/public/build/
+/public/mix-manifest.json
+
+# Dependencies
+composer.phar
+node_modules/
+.npm
+.yarn/
+package-lock.json
+yarn.lock
+
+# Documentation generated
+docs/_build/
+site/
+
+# Deployment
+deploy.log
+deployment.log
+*.deployment
+.deploy/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+database/*.sqlite
+database/*.sqlite3
+
+# Laravel specific
+/.phpunit.cache
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+
+# Compiled assets
+/public/build/
+/public/hot
+/public/storage
+/public/.htaccess
+
+# Misc
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+.DS_Store
+.env.local
+.env.*.local

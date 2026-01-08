@@ -7,9 +7,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
-use App\Models\Player;
+use App\Models\User;
 use App\Http\Resources\AuthResource;
-use App\Http\Resources\PlayerResource;
+use App\Http\Resources\UserResource;
 use Carbon\Carbon;
 
 class AuthController extends Controller
@@ -21,18 +21,18 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $player = Player::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first();
 
-        if (!$player || !Hash::check($request->password, $player->password)) {
+        if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Credenciais inválidas'], 401);
         }
 
-        $token = $player->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken('auth_token')->plainTextToken;
 
         $authData = (object) [
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'player' => $player,
+            'user' => $user->load('player'),
         ];
 
         return new AuthResource($authData);
@@ -47,13 +47,13 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        $player = $request->user();
+        $user = $request->user();
         
-        if (!$player) {
+        if (!$user) {
             return response()->json(['message' => 'Não autenticado.'], 401);
         }
 
-        return new PlayerResource($player);
+        return new UserResource($user->load('player'));
     }
 
     public function forgotPassword(Request $request)
@@ -62,9 +62,9 @@ class AuthController extends Controller
             'email' => 'required|email',
         ]);
 
-        $player = Player::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first();
 
-        if (!$player) {
+        if (!$user) {
             return response()->json([
                 'message' => 'Se o email existir, um link de recuperação será enviado.'
             ], 200);
@@ -85,10 +85,10 @@ class AuthController extends Controller
         try {
             Mail::send('emails.password-reset', [
                 'token' => $token,
-                'player' => $player,
+                'user' => $user,
                 'resetUrl' => $resetUrl
-            ], function ($message) use ($player) {
-                $message->to($player->email, $player->name);
+            ], function ($message) use ($user) {
+                $message->to($user->email, $user->name);
                 $message->subject('Recuperação de Senha - Red Devils');
             });
         } catch (\Exception $e) {
@@ -120,7 +120,7 @@ class AuthController extends Controller
     public function resetPassword(Request $request)
     {
         $request->validate([
-            'email' => 'required|email|exists:players,email',
+            'email' => 'required|email|exists:users,email',
             'token' => 'required|string',
             'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
         ], [
@@ -151,12 +151,12 @@ class AuthController extends Controller
             ], 400);
         }
 
-        $player = Player::where('email', $request->email)->first();
-        $player->password = Hash::make($request->password);
-        $player->save();
+        $user = User::where('email', $request->email)->first();
+        $user->password = Hash::make($request->password);
+        $user->save();
 
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();
-        $player->tokens()->delete();
+        $user->tokens()->delete();
 
         return response()->json([
             'message' => 'Senha redefinida com sucesso.'

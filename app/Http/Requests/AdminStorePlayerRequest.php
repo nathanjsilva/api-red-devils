@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AdminStorePlayerRequest extends FormRequest
 {
@@ -24,11 +25,16 @@ class AdminStorePlayerRequest extends FormRequest
         return [
             'name'     => 'required|string|max:255|unique:players,name',
             'email'    => 'nullable|email|unique:players,email',
-            'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
+            'password' => 'nullable|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
             'position' => 'required|in:linha,goleiro',
             'phone'    => 'required|string|unique:players,phone',
             'nickname' => 'required|string|max:255|unique:players,nickname',
             'is_admin' => 'boolean',
+            'user_id'  => [
+                'nullable',
+                'exists:users,id',
+                Rule::unique('players', 'user_id'), // Permite apenas um player por user
+            ],
         ];
     }
 

@@ -5,10 +5,10 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class PlayerResource extends JsonResource
+class UserResource extends JsonResource
 {
     /**
-     * Transforma o recurso em um array.
+     * Transform the resource into an array.
      *
      * @return array<string, mixed>
      */
@@ -19,12 +19,9 @@ class PlayerResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'position' => $this->position,
-            'phone' => $this->phone,
-            'nickname' => $this->nickname,
-            'is_admin' => $this->is_admin,
-            'user_id' => $this->user_id,
-            'user' => $this->whenLoaded('user', function () {
-                return new \App\Http\Resources\UserResource($this->user);
+            'profile' => $this->profile,
+            'player' => $this->whenLoaded('player', function () {
+                return new \App\Http\Resources\PlayerResource($this->player);
             }),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),

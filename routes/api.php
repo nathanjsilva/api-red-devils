@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PlayerController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\PeladaController;
 use App\Http\Controllers\StatisticsController;
@@ -12,7 +13,7 @@ use App\Http\Controllers\TeamController;
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-Route::post('/players', [PlayerController::class, 'store']);
+Route::post('/users', [UserController::class, 'store']); // Cadastro de usuários comuns
 Route::post('/setup-first-admin', [AdminController::class, 'setupFirstAdmin']);
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -51,6 +52,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     
     Route::prefix('admin')->middleware('admin')->group(function () {
+        Route::get('users', [AdminController::class, 'listAvailableUsers']); // Lista usuários disponíveis para relacionar
+        
         Route::post('players', [AdminController::class, 'storePlayer']);
         Route::put('players/{id}', [AdminController::class, 'updatePlayer']);
         Route::delete('players/{id}', [AdminController::class, 'deletePlayer']);

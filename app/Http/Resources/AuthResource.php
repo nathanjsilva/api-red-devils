@@ -17,7 +17,7 @@ class AuthResource extends JsonResource
         return [
             'access_token' => $this->access_token,
             'token_type' => $this->token_type,
-            'player' => new PlayerResource($this->player),
+            'user' => new UserResource($this->user),
         ];
     }
 }

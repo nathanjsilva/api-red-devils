@@ -11,17 +11,21 @@ use App\Http\Requests\UpdateMatchPlayerRequest;
 use App\Http\Resources\PlayerResource;
 use App\Http\Resources\PeladaResource;
 use App\Http\Resources\MatchPlayerResource;
+use App\Http\Resources\UserResource;
 use App\Models\Player;
+use App\Models\User;
 use App\Models\Pelada;
 use App\Models\MatchPlayer;
 use App\Models\Team;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class AdminController extends Controller
 {
     public function setupFirstAdmin(Request $request)
     {
-        $adminExists = Player::where('is_admin', true)->exists();
+        $adminExists = User::where('profile', 'admin')->exists();
         if ($adminExists) {
             return response()->json([
                 'message' => 'Já existem administradores no sistema. Use as rotas de admin para gerenciar permissões.'
@@ -29,32 +33,52 @@ class AdminController extends Controller
         }
 
         $request->validate([
-            'name'     => 'required|string|max:255|unique:players,name',
-            'email'    => 'required|email|unique:players,email',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
             'position' => 'required|in:linha,goleiro',
-            'phone'    => 'required|string|unique:players,phone',
-            'nickname' => 'required|string|max:255|unique:players,nickname',
         ]);
 
-        $player = Player::create([
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => bcrypt($request->password),
+            'password' => Hash::make($request->password),
             'position' => $request->position,
-            'phone' => $request->phone,
-            'nickname' => $request->nickname,
-            'is_admin' => true,
+            'profile' => 'admin',
         ]);
 
         return response()->json([
             'message' => 'Primeiro administrador criado com sucesso!',
-            'player' => new PlayerResource($player)
+            'user' => new UserResource($user)
         ], 201);
     }
     public function storePlayer(AdminStorePlayerRequest $request)
     {
-        $player = Player::create($request->validated());
+        $validated = $request->validated();
+        
+        if (isset($validated['user_id'])) {
+            $user = User::find($validated['user_id']);
+            if (!$user) {
+                return response()->json(['message' => 'Usuário não encontrado.'], 404);
+            }
+            
+            if ($user->player) {
+                return response()->json(['message' => 'Este usuário já está vinculado a um jogador.'], 400);
+            }
+        }
+        
+        if (isset($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
+        } else if (!isset($validated['user_id'])) {
+            $validated['password'] = Hash::make(Str::random(16));
+        }
+        
+        $player = Player::create($validated);
+        
+        if ($player->user_id) {
+            $player->load('user');
+        }
+        
         return new PlayerResource($player);
     }
 
@@ -65,7 +89,29 @@ class AdminController extends Controller
             return response()->json(['message' => 'Jogador não encontrado.'], 404);
         }
 
-        $player->update($request->validated());
+        $validated = $request->validated();
+        
+        if (isset($validated['user_id']) && $validated['user_id'] !== $player->user_id) {
+            $user = User::find($validated['user_id']);
+            if (!$user) {
+                return response()->json(['message' => 'Usuário não encontrado.'], 404);
+            }
+            
+            if ($user->player && $user->player->id !== $player->id) {
+                return response()->json(['message' => 'Este usuário já está vinculado a outro jogador.'], 400);
+            }
+        }
+        
+        if (isset($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
+        }
+
+        $player->update($validated);
+        
+        if ($player->user_id) {
+            $player->load('user');
+        }
+        
         return new PlayerResource($player);
     }
 
@@ -186,7 +232,10 @@ class AdminController extends Controller
             }
         }
 
-        $players = Player::whereIn('id', $request->player_ids)->get();
+        // Filtra apenas players que estão vinculados a usuários (user_id não é null)
+        $players = Player::whereIn('id', $request->player_ids)
+            ->whereNotNull('user_id')
+            ->get();
         $goalkeepers = $players->where('position', 'goleiro');
         $fieldPlayers = $players->where('position', 'linha');
 
@@ -274,5 +323,12 @@ class AdminController extends Controller
             'message' => 'Permissões de admin removidas com sucesso.',
             'player' => new PlayerResource($player)
         ]);
+    }
+
+    public function listAvailableUsers(Request $request)
+    {
+        $users = User::with('player')->get();
+
+        return UserResource::collection($users);
     }
 }
