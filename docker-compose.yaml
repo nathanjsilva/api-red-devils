@@ -42,6 +42,8 @@ services:
     networks:
       - api_red_devils_network
     restart: unless-stopped
+    ports:
+      - "3306:3306"
 
 volumes:
   dbdata:

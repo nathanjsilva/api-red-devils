@@ -33,7 +33,7 @@ class AdminStorePlayerRequest extends FormRequest
             'user_id'  => [
                 'nullable',
                 'exists:users,id',
-                Rule::unique('players', 'user_id'), // Permite apenas um player por user
+                Rule::unique('players', 'user_id'),
             ],
         ];
     }

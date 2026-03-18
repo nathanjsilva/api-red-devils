@@ -23,9 +23,11 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'required|email|unique:users,email|unique:players,email',
             'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
             'position' => 'required|in:linha,goleiro',
+            'phone' => 'required|string|unique:players,phone',
+            'nickname' => 'required|string|max:255|unique:players,nickname',
         ];
     }
 
@@ -46,6 +48,10 @@ class StoreUserRequest extends FormRequest
             'password.regex' => 'A senha deve conter pelo menos: 1 letra minúscula, 1 maiúscula, 1 número e 1 caractere especial.',
             'position.required' => 'A posição é obrigatória.',
             'position.in' => 'A posição deve ser "linha" ou "goleiro".',
+            'phone.required' => 'O telefone é obrigatório.',
+            'phone.unique' => 'Este telefone já está cadastrado.',
+            'nickname.required' => 'O apelido é obrigatório.',
+            'nickname.unique' => 'Este apelido já está em uso.',
         ];
     }
 }

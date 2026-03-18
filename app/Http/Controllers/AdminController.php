@@ -34,9 +34,11 @@ class AdminController extends Controller
 
         $request->validate([
             'name'     => 'required|string|max:255',
-            'email'    => 'required|email|unique:users,email',
+            'email'    => 'required|email|unique:users,email|unique:players,email',
             'password' => 'required|string|min:8|regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/',
             'position' => 'required|in:linha,goleiro',
+            'phone'    => 'required|string|unique:players,phone',
+            'nickname' => 'required|string|max:255|unique:players,nickname',
         ]);
 
         $user = User::create([
@@ -47,9 +49,22 @@ class AdminController extends Controller
             'profile' => 'admin',
         ]);
 
+        $player = Player::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'position' => $request->position,
+            'phone' => $request->phone,
+            'nickname' => $request->nickname,
+            'is_admin' => true,
+            'user_id' => $user->id,
+        ]);
+
+        $player->load('user');
+
         return response()->json([
             'message' => 'Primeiro administrador criado com sucesso!',
-            'user' => new UserResource($user)
+            'player' => new PlayerResource($player)
         ], 201);
     }
     public function storePlayer(AdminStorePlayerRequest $request)
