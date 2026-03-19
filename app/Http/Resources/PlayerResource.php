@@ -17,15 +17,8 @@ class PlayerResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'email' => $this->email,
-            'position' => $this->position,
-            'phone' => $this->phone,
             'nickname' => $this->nickname,
-            'is_admin' => $this->is_admin,
-            'user_id' => $this->user_id,
-            'user' => $this->whenLoaded('user', function () {
-                return new \App\Http\Resources\UserResource($this->user);
-            }),
+            'position' => $this->position,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

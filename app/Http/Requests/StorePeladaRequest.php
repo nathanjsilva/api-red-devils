@@ -22,7 +22,7 @@ class StorePeladaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date' => 'required|date|after_or_equal:today',
+            'date' => 'required|date',
             'location' => 'required|string|max:255',
             'qtd_times' => 'required|integer|min:2|max:10',
             'qtd_jogadores_por_time' => 'required|integer|min:5|max:15',

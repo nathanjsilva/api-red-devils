@@ -7,24 +7,23 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Executa as migrações.
+     * Run the migrations.
      */
     public function up(): void
     {
         Schema::create('teams', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('pelada_id')->constrained()->onDelete('cascade');
+            $table->foreignId('pelada_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->timestamps();
         });
     }
 
     /**
-     * Reverte as migrações.
+     * Reverse the migrations.
      */
     public function down(): void
     {
         Schema::dropIfExists('teams');
     }
 };
-

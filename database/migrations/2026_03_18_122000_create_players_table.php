@@ -7,22 +7,21 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Executa as migrações.
+     * Run the migrations.
      */
     public function up(): void
     {
         Schema::create('players', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('email')->unique();
-            $table->string('password');
+            $table->string('nickname')->unique();
+            $table->enum('position', ['linha', 'goleiro']);
             $table->timestamps();
         });
     }
 
-
     /**
-     * Reverte as migrações.
+     * Reverse the migrations.
      */
     public function down(): void
     {

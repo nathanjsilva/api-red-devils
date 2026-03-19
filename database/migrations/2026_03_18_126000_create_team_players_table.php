@@ -7,27 +7,25 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Executa as migrações.
+     * Run the migrations.
      */
     public function up(): void
     {
         Schema::create('team_players', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('team_id')->constrained()->onDelete('cascade');
-            $table->foreignId('player_id')->constrained()->onDelete('cascade');
+            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('player_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
-            
-            // Garantir que um jogador só pode estar em um time por pelada
+
             $table->unique(['team_id', 'player_id']);
         });
     }
 
     /**
-     * Reverte as migrações.
+     * Reverse the migrations.
      */
     public function down(): void
     {
         Schema::dropIfExists('team_players');
     }
 };
-

@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MatchPlayer;
 use App\Models\Pelada;
 use App\Models\Player;
 use App\Models\Team;
-use App\Models\MatchPlayer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -15,7 +15,7 @@ class TeamController extends Controller
     {
         $pelada = Pelada::find($peladaId);
         if (!$pelada) {
-            return response()->json(['message' => 'Pelada não encontrada.'], 404);
+            return $this->errorResponse('Pelada não encontrada.', 404);
         }
 
         $teamFields = [];
@@ -23,7 +23,7 @@ class TeamController extends Controller
             $teamFields[] = [
                 'field_name' => "time_{$i}",
                 'label' => "Time {$i}",
-                'team_number' => $i
+                'team_number' => $i,
             ];
         }
 
@@ -34,49 +34,48 @@ class TeamController extends Controller
                 'location' => $pelada->location,
                 'qtd_times' => $pelada->qtd_times,
                 'qtd_jogadores_por_time' => $pelada->qtd_jogadores_por_time,
-                'qtd_goleiros' => $pelada->qtd_goleiros
+                'qtd_goleiros' => $pelada->qtd_goleiros,
             ],
-            'team_fields' => $teamFields
+            'team_fields' => $teamFields,
         ]);
     }
 
-	public function getPeladaPlayers($peladaId)
-	{
-		$pelada = Pelada::find($peladaId);
-		if (!$pelada) {
-			return response()->json(['message' => 'Pelada não encontrada.'], 404);
-		}
+    public function getPeladaPlayers($peladaId)
+    {
+        $pelada = Pelada::find($peladaId);
+        if (!$pelada) {
+            return $this->errorResponse('Pelada não encontrada.', 404);
+        }
 
-		$peladaPlayerIds = MatchPlayer::where('pelada_id', $peladaId)->pluck('player_id');
+        $peladaPlayerIds = MatchPlayer::where('pelada_id', $peladaId)->pluck('player_id');
 
-		$players = Player::when($peladaPlayerIds->isNotEmpty(), function ($query) use ($peladaPlayerIds) {
-			$query->whereNotIn('id', $peladaPlayerIds);
-		})->get()->map(function ($player) {
-			return [
-				'id' => $player->id,
-				'name' => $player->name,
-				'nickname' => $player->nickname,
-				'position' => $player->position,
-				'phone' => $player->phone,
-				'is_goalkeeper' => $player->position === 'goleiro'
-			];
-		});
+        $players = Player::when($peladaPlayerIds->isNotEmpty(), function ($query) use ($peladaPlayerIds) {
+            $query->whereNotIn('id', $peladaPlayerIds);
+        })->get()->map(function ($player) {
+            return [
+                'id' => $player->id,
+                'name' => $player->name,
+                'nickname' => $player->nickname,
+                'position' => $player->position,
+                'is_goalkeeper' => $player->position === 'goleiro',
+            ];
+        });
 
-		return response()->json([
-			'pelada' => [
-				'id' => $pelada->id,
-				'date' => $pelada->date,
-				'location' => $pelada->location
-			],
-			'players' => $players
-		]);
-	}
+        return response()->json([
+            'pelada' => [
+                'id' => $pelada->id,
+                'date' => $pelada->date,
+                'location' => $pelada->location,
+            ],
+            'players' => $players,
+        ]);
+    }
 
     public function organizePlayers(Request $request, $peladaId)
     {
         $pelada = Pelada::find($peladaId);
         if (!$pelada) {
-            return response()->json(['message' => 'Pelada não encontrada.'], 404);
+            return $this->errorResponse('Pelada não encontrada.', 404);
         }
 
         $request->validate([
@@ -84,16 +83,15 @@ class TeamController extends Controller
             'team_assignments.*' => 'required|array',
             'team_assignments.*.team_number' => 'required|integer|min:1|max:' . $pelada->qtd_times,
             'team_assignments.*.player_ids' => 'required|array',
-            'team_assignments.*.player_ids.*' => 'exists:players,id'
+            'team_assignments.*.player_ids.*' => 'exists:players,id',
         ]);
 
         $existingTeams = Team::where('pelada_id', $peladaId)->get();
-        if ($existingTeams->count() > 0) {
-            foreach ($existingTeams as $team) {
-                $team->players()->detach();
-                $team->delete();
-            }
+        foreach ($existingTeams as $team) {
+            $team->players()->detach();
+            $team->delete();
         }
+
         $assignedPlayerIds = [];
         foreach ($request->team_assignments as $assignment) {
             $assignedPlayerIds = array_merge($assignedPlayerIds, $assignment['player_ids']);
@@ -102,24 +100,26 @@ class TeamController extends Controller
         $existingPlayerIds = Player::whereIn('id', $assignedPlayerIds)->pluck('id')->toArray();
         $invalidPlayers = array_diff($assignedPlayerIds, $existingPlayerIds);
         if (!empty($invalidPlayers)) {
-            return response()->json([
-                'message' => 'Alguns jogadores não existem no sistema.',
-                'invalid_players' => $invalidPlayers
-            ], 400);
+            return $this->errorResponse(
+                'Alguns jogadores não existem no sistema.',
+                400,
+                'Foram informados IDs de jogadores inválidos.',
+                ['invalid_players' => $invalidPlayers]
+            );
         }
 
         DB::beginTransaction();
-        
+
         try {
             $teams = [];
             foreach ($request->team_assignments as $assignment) {
                 $team = Team::create([
                     'pelada_id' => $peladaId,
-                    'name' => "Time {$assignment['team_number']}"
+                    'name' => "Time {$assignment['team_number']}",
                 ]);
-                
+
                 $team->players()->attach($assignment['player_ids']);
-                
+
                 $teams[] = [
                     'id' => $team->id,
                     'name' => $team->name,
@@ -129,9 +129,9 @@ class TeamController extends Controller
                             'id' => $player->id,
                             'name' => $player->name,
                             'nickname' => $player->nickname,
-                            'position' => $player->position
+                            'position' => $player->position,
                         ];
-                    })
+                    }),
                 ];
             }
 
@@ -139,12 +139,12 @@ class TeamController extends Controller
 
             return response()->json([
                 'message' => 'Times organizados com sucesso.',
-                'teams' => $teams
+                'teams' => $teams,
             ]);
-
         } catch (\Exception $e) {
-            DB::rollback();
-            return response()->json(['message' => 'Erro ao organizar times.'], 500);
+            DB::rollBack();
+
+            return $this->errorResponse('Erro ao organizar times.', 500, $e->getMessage());
         }
     }
 
@@ -152,26 +152,24 @@ class TeamController extends Controller
     {
         $pelada = Pelada::find($peladaId);
         if (!$pelada) {
-            return response()->json(['message' => 'Pelada não encontrada.'], 404);
+            return $this->errorResponse('Pelada não encontrada.', 404);
         }
 
         $teams = Team::where('pelada_id', $peladaId)
-            ->with(['players' => function ($query) {
-                $query->with('player');
-            }])
+            ->with('players')
             ->get()
             ->map(function ($team) {
                 return [
                     'id' => $team->id,
                     'name' => $team->name,
-                    'players' => $team->players->map(function ($teamPlayer) {
+                    'players' => $team->players->map(function ($player) {
                         return [
-                            'id' => $teamPlayer->player->id,
-                            'name' => $teamPlayer->player->name,
-                            'nickname' => $teamPlayer->player->nickname,
-                            'position' => $teamPlayer->player->position
+                            'id' => $player->id,
+                            'name' => $player->name,
+                            'nickname' => $player->nickname,
+                            'position' => $player->position,
                         ];
-                    })
+                    }),
                 ];
             });
 
@@ -179,9 +177,9 @@ class TeamController extends Controller
             'pelada' => [
                 'id' => $pelada->id,
                 'date' => $pelada->date,
-                'location' => $pelada->location
+                'location' => $pelada->location,
             ],
-            'teams' => $teams
+            'teams' => $teams,
         ]);
     }
 
@@ -189,7 +187,7 @@ class TeamController extends Controller
     {
         $pelada = Pelada::find($peladaId);
         if (!$pelada) {
-            return response()->json(['message' => 'Pelada não encontrada.'], 404);
+            return $this->errorResponse('Pelada não encontrada.', 404);
         }
 
         $matchPlayers = MatchPlayer::where('pelada_id', $peladaId)
@@ -215,10 +213,9 @@ class TeamController extends Controller
             ->get();
 
         $teamPlayers = collect();
-        
         foreach ($teamPlayersData as $item) {
             $playerId = $item->player_id;
-            
+
             if (!$teamPlayers->has($playerId) || $item->pelada_id == $peladaId) {
                 $teamPlayers->put($playerId, (object) [
                     'player_id' => $playerId,
@@ -227,17 +224,17 @@ class TeamController extends Controller
                 ]);
             }
         }
+
         if ($teams->isEmpty()) {
             $playersWithStats = $matchPlayers->map(function ($matchPlayer) use ($teamPlayers) {
                 $player = $matchPlayer->player;
                 $teamPlayer = $teamPlayers->get($player->id);
-                
-                $playerData = [
+
+                return [
                     'id' => $player->id,
                     'name' => $player->name,
                     'nickname' => $player->nickname,
                     'position' => $player->position,
-                    'phone' => $player->phone,
                     'statistics' => [
                         'goals' => $matchPlayer->goals,
                         'assists' => $matchPlayer->assists,
@@ -245,19 +242,12 @@ class TeamController extends Controller
                         'is_winner' => $matchPlayer->is_winner,
                         'result' => $matchPlayer->result ?? ($matchPlayer->is_winner ? 'win' : 'loss'),
                         'goal_participation' => $matchPlayer->goals + $matchPlayer->assists,
-                    ]
-                ];
-
-                if ($teamPlayer) {
-                    $playerData['team'] = [
+                    ],
+                    'team' => $teamPlayer ? [
                         'id' => $teamPlayer->team_id,
                         'name' => $teamPlayer->team_name,
-                    ];
-                } else {
-                    $playerData['team'] = null;
-                }
-
-                return $playerData;
+                    ] : null,
+                ];
             })->values();
 
             return response()->json([
@@ -267,10 +257,10 @@ class TeamController extends Controller
                     'location' => $pelada->location,
                     'qtd_times' => $pelada->qtd_times,
                     'qtd_jogadores_por_time' => $pelada->qtd_jogadores_por_time,
-                    'qtd_goleiros' => $pelada->qtd_goleiros
+                    'qtd_goleiros' => $pelada->qtd_goleiros,
                 ],
                 'teams' => [],
-                'players' => $playersWithStats
+                'players' => $playersWithStats,
             ]);
         }
 
@@ -280,30 +270,22 @@ class TeamController extends Controller
                 'name' => $team->name,
                 'players' => $team->players->map(function ($player) use ($matchPlayers) {
                     $matchPlayer = $matchPlayers->get($player->id);
-                    
-                    $playerData = [
+
+                    return [
                         'id' => $player->id,
                         'name' => $player->name,
                         'nickname' => $player->nickname,
                         'position' => $player->position,
-                        'phone' => $player->phone,
-                    ];
-
-                    if ($matchPlayer) {
-                        $playerData['statistics'] = [
+                        'statistics' => $matchPlayer ? [
                             'goals' => $matchPlayer->goals,
                             'assists' => $matchPlayer->assists,
                             'goals_conceded' => $matchPlayer->goals_conceded,
                             'is_winner' => $matchPlayer->is_winner,
                             'result' => $matchPlayer->result ?? ($matchPlayer->is_winner ? 'win' : 'loss'),
                             'goal_participation' => $matchPlayer->goals + $matchPlayer->assists,
-                        ];
-                    } else {
-                        $playerData['statistics'] = null;
-                    }
-
-                    return $playerData;
-                })
+                        ] : null,
+                    ];
+                }),
             ];
         });
 
@@ -314,9 +296,9 @@ class TeamController extends Controller
                 'location' => $pelada->location,
                 'qtd_times' => $pelada->qtd_times,
                 'qtd_jogadores_por_time' => $pelada->qtd_jogadores_por_time,
-                'qtd_goleiros' => $pelada->qtd_goleiros
+                'qtd_goleiros' => $pelada->qtd_goleiros,
             ],
-            'teams' => $teamsWithPlayers
+            'teams' => $teamsWithPlayers,
         ]);
     }
 }

@@ -22,7 +22,7 @@ class UpdatePeladaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date' => 'sometimes|date|after_or_equal:today',
+            'date' => 'sometimes|date',
         ];
     }
 
