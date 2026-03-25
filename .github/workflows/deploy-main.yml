@@ -1,0 +1,33 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy on VPS via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -Eeuo pipefail
+            APP_DIR="${{ secrets.VPS_APP_DIR }}"
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Diretorio da aplicacao nao contem repositorio Git: $APP_DIR"
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+            chmod +x deploy.sh
+            APP_BRANCH=main ./deploy.sh

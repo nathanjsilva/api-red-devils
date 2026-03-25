@@ -124,6 +124,7 @@ yarn.lock
 # Documentation generated
 docs/_build/
 site/
+docs/DEPLOY_AUTOMATICO.md
 
 # Deployment
 deploy.log
