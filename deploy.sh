@@ -51,6 +51,10 @@ if [ ! -f ".env" ]; then
   exit 1
 fi
 
+set -a
+. ./.env
+set +a
+
 echo "Parando stack atual..."
 run_compose down --remove-orphans
 
@@ -63,7 +67,7 @@ until run_compose exec -T mysql mysqladmin ping -h 127.0.0.1 -u"${DB_USERNAME}" 
 done
 
 echo "Instalando dependencias PHP..."
-run_compose run --rm app composer install --no-dev --optimize-autoloader
+run_compose run --rm app sh -lc "git config --global --add safe.directory /var/www && composer install --no-dev --optimize-autoloader"
 
 echo "Subindo aplicacao e Nginx..."
 run_compose up -d --build app nginx
