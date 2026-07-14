@@ -1,9 +1,9 @@
 <?php
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -22,7 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (ValidationException $e, Request $request) {
-            if (!$request->expectsJson() && !$request->is('api/*')) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
                 return null;
             }
 
@@ -34,7 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (AuthenticationException $e, Request $request) {
-            if (!$request->expectsJson() && !$request->is('api/*')) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
                 return null;
             }
 
@@ -45,7 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (\Throwable $e, Request $request) {
-            if (!$request->expectsJson() && !$request->is('api/*')) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
                 return null;
             }
 

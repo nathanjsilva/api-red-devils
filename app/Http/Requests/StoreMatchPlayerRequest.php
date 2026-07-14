@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreMatchPlayerRequest extends FormRequest
 {
@@ -23,12 +22,11 @@ class StoreMatchPlayerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'player_id'      => 'required|exists:players,id',
-            'pelada_id'      => 'required|exists:peladas,id',
-            'goals'          => 'nullable|integer|min:0',
-            'assists'        => 'nullable|integer|min:0',
-            'is_winner'      => 'nullable|boolean',
-            'result'         => 'nullable|in:win,loss,draw',
+            'player_id' => 'required|exists:players,id',
+            'pelada_id' => 'required|exists:peladas,id',
+            'goals' => 'nullable|integer|min:0',
+            'assists' => 'nullable|integer|min:0',
+            'result' => 'required|in:win,loss,draw',
             'goals_conceded' => 'nullable|integer|min:0',
         ];
     }
@@ -42,17 +40,17 @@ class StoreMatchPlayerRequest extends FormRequest
     {
         return [
             'player_id.required' => 'O ID do jogador é obrigatório.',
-            'player_id.exists'   => 'Jogador não encontrado.',
+            'player_id.exists' => 'Jogador não encontrado.',
             'pelada_id.required' => 'O ID da pelada é obrigatório.',
-            'pelada_id.exists'   => 'Pelada não encontrada.',
-            'goals.integer'      => 'Gols deve ser um número inteiro.',
-            'goals.min'          => 'Gols não pode ser negativo.',
-            'assists.integer'    => 'Assistências deve ser um número inteiro.',
-            'assists.min'        => 'Assistências não pode ser negativo.',
-            'is_winner.boolean'  => 'Status de vencedor deve ser verdadeiro ou falso.',
-            'result.in'          => 'Resultado deve ser: win, loss ou draw.',
+            'pelada_id.exists' => 'Pelada não encontrada.',
+            'goals.integer' => 'Gols deve ser um número inteiro.',
+            'goals.min' => 'Gols não pode ser negativo.',
+            'assists.integer' => 'Assistências deve ser um número inteiro.',
+            'assists.min' => 'Assistências não pode ser negativo.',
+            'result.required' => 'O resultado da partida é obrigatório.',
+            'result.in' => 'Resultado deve ser: win, loss ou draw.',
             'goals_conceded.integer' => 'Gols sofridos deve ser um número inteiro.',
-            'goals_conceded.min'     => 'Gols sofridos não pode ser negativo.',
+            'goals_conceded.min' => 'Gols sofridos não pode ser negativo.',
         ];
     }
 
@@ -68,9 +66,9 @@ class StoreMatchPlayerRequest extends FormRequest
             // Verificar se o jogador já está na pelada
             if ($this->player_id && $this->pelada_id) {
                 $existing = \App\Models\MatchPlayer::where('player_id', $this->player_id)
-                                                  ->where('pelada_id', $this->pelada_id)
-                                                  ->exists();
-                
+                    ->where('pelada_id', $this->pelada_id)
+                    ->exists();
+
                 if ($existing) {
                     $validator->errors()->add('player_id', 'Este jogador já está registrado nesta pelada.');
                 }

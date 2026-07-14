@@ -12,7 +12,6 @@ class MatchPlayer extends Model
         'goals',
         'assists',
         'goals_conceded',
-        'is_winner',
         'result',
     ];
 

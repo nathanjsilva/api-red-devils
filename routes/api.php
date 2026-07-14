@@ -1,7 +1,11 @@
 <?php
 
-use App\Http\Controllers\AdminController;
+use App\Http\Controllers\Admin\MatchPlayerController as AdminMatchPlayerController;
+use App\Http\Controllers\Admin\PeladaController as AdminPeladaController;
+use App\Http\Controllers\Admin\PlayerController as AdminPlayerController;
+use App\Http\Controllers\Admin\TeamController as AdminTeamController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\PeladaController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\TeamController;
@@ -11,6 +15,17 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/players', [PlayerController::class, 'index']);
 Route::get('/players/{id}', [PlayerController::class, 'show']);
+
+Route::get('/peladas', [PeladaController::class, 'index']);
+Route::get('/peladas/date/{date}', [PeladaController::class, 'byDate']);
+Route::get('/peladas/{id}', [PeladaController::class, 'show']);
+
+Route::prefix('teams')->group(function () {
+    Route::get('pelada/{peladaId}/fields', [TeamController::class, 'getTeamFields']);
+    Route::get('pelada/{peladaId}/players-with-statistics', [TeamController::class, 'getPeladaPlayersWithStatistics']);
+    Route::get('pelada/{peladaId}/players', [TeamController::class, 'getPeladaPlayers']);
+    Route::get('pelada/{peladaId}/organized', [TeamController::class, 'getPeladaTeams']);
+});
 
 Route::prefix('statistics')->group(function () {
     Route::get('player/{playerId}/pelada/{peladaId}', [StatisticsController::class, 'playerInPelada']);
@@ -28,26 +43,19 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
-    Route::post('players', [AdminController::class, 'storePlayer']);
-    Route::put('players/{id}', [AdminController::class, 'updatePlayer']);
-    Route::delete('players/{id}', [AdminController::class, 'deletePlayer']);
+    Route::post('players', [AdminPlayerController::class, 'store']);
+    Route::put('players/{id}', [AdminPlayerController::class, 'update']);
+    Route::delete('players/{id}', [AdminPlayerController::class, 'destroy']);
 
-    Route::get('peladas', [AdminController::class, 'listPeladas']);
-    Route::get('peladas/{id}', [AdminController::class, 'showPelada']);
-    Route::get('peladas/date/{date}', [AdminController::class, 'getPeladasByDate']);
-    Route::post('peladas', [AdminController::class, 'storePelada']);
-    Route::put('peladas/{id}', [AdminController::class, 'updatePelada']);
-    Route::delete('peladas/{id}', [AdminController::class, 'deletePelada']);
+    Route::post('peladas', [AdminPeladaController::class, 'store']);
+    Route::put('peladas/{id}', [AdminPeladaController::class, 'update']);
+    Route::delete('peladas/{id}', [AdminPeladaController::class, 'destroy']);
 
-    Route::get('teams/pelada/{peladaId}/fields', [TeamController::class, 'getTeamFields']);
-    Route::get('teams/pelada/{peladaId}/players-with-statistics', [TeamController::class, 'getPeladaPlayersWithStatistics']);
-    Route::get('teams/pelada/{peladaId}/players', [TeamController::class, 'getPeladaPlayers']);
-    Route::get('teams/pelada/{peladaId}/organized', [TeamController::class, 'getPeladaTeams']);
-    Route::post('teams/pelada/{peladaId}/organize', [TeamController::class, 'organizePlayers']);
-    Route::post('peladas/{peladaId}/organize-teams', [AdminController::class, 'organizeTeams']);
+    Route::post('teams/pelada/{peladaId}/organize', [AdminTeamController::class, 'organizeManual']);
+    Route::post('peladas/{peladaId}/organize-teams', [AdminTeamController::class, 'organizeAutomatic']);
 
-    Route::post('match-players', [AdminController::class, 'storeMatchPlayer']);
-    Route::put('match-players/{id}', [AdminController::class, 'updateMatchPlayer']);
-    Route::delete('match-players/{id}', [AdminController::class, 'deleteMatchPlayer']);
-    Route::put('peladas/{peladaId}/players/{playerId}/statistics', [AdminController::class, 'updateMatchPlayerByPlayerAndPelada']);
+    Route::post('match-players', [AdminMatchPlayerController::class, 'store']);
+    Route::put('match-players/{id}', [AdminMatchPlayerController::class, 'update']);
+    Route::delete('match-players/{id}', [AdminMatchPlayerController::class, 'destroy']);
+    Route::put('peladas/{peladaId}/players/{playerId}/statistics', [AdminMatchPlayerController::class, 'upsertByPlayerAndPelada']);
 });

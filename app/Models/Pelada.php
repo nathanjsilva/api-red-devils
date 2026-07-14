@@ -4,17 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Pelada extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'date',
         'location',
         'qtd_times',
         'qtd_jogadores_por_time',
-        'qtd_goleiros'
+        'qtd_goleiros',
     ];
 
     public function matchPlayers()
@@ -25,8 +26,8 @@ class Pelada extends Model
     public function players()
     {
         return $this->belongsToMany(Player::class, 'match_players')
-                    ->withPivot('goals', 'assists', 'is_winner', 'result', 'goals_conceded')
-                    ->withTimestamps();
+            ->withPivot('goals', 'assists', 'result', 'goals_conceded')
+            ->withTimestamps();
     }
 
     public function teams()

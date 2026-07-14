@@ -2,45 +2,58 @@
 
 ## Estilo arquitetural
 
-Laravel "padrão" (MVC simplificado), **sem** camadas de Domain-Driven Design, Services ou Repositories. Fluxo direto:
+Laravel com uma camada leve de **Services** para regras de negócio compartilhadas ou transacionais. Não é DDD nem Repository Pattern — é o mínimo necessário para tirar lógica de negócio não-trivial de dentro dos controllers. Fluxo:
 
 ```
 Request HTTP
   → Route (routes/api.php)
   → Middleware (auth:sanctum, admin)
   → Form Request (validação, quando existir)
-  → Controller (regra de aplicação + orquestração)
-  → Model / Eloquent (persistência, relações)
+  → Controller (orquestração: 404s, chamadas a Service/Model)
+  → Service (regra de negócio multi-passo/transacional, quando existir) OU Model/Eloquent direto (CRUD simples)
   → Resource (serialização da resposta)
   → JSON Response
 ```
 
-Não proponha introduzir camadas extras (Services, UseCases, Repositories, Actions) a menos que o usuário peça explicitamente. Se identificar duplicação de lógica entre controllers que justificaria extração, **sugira** ao usuário em vez de refatorar direto.
+**Quando usar Service vs. Model direto:** se a operação é um CRUD simples de um único registro (criar/atualizar/remover um `Player`, uma `Pelada`), o controller fala direto com o Model — não crie um Service para isso. Um Service se justifica quando: (a) a lógica é usada por mais de um fluxo (ex.: organização manual e automática de times), (b) envolve múltiplos passos com necessidade de transação, ou (c) é uma consulta complexa reutilizável (ex.: cálculo de rankings). Não crie Services "por precaução" para operações triviais.
 
 ## Estrutura de pastas relevante
 
 ```
 app/
 ├── Http/
-│   ├── Controllers/     ← lógica de aplicação por domínio
-│   │   ├── AuthController.php
-│   │   ├── PlayerController.php      ← rotas públicas de leitura
-│   │   ├── AdminController.php       ← CRUD de players/peladas/match-players + organize-teams (grande, concentra várias áreas)
-│   │   ├── TeamController.php        ← organização de times (fields/players/organize/organized/with-statistics)
-│   │   ├── StatisticsController.php  ← estatísticas e rankings
-│   │   └── MatchPlayerController.php ← NÃO roteado hoje, ver feature-index.md
+│   ├── Controllers/
+│   │   ├── AuthController.php          ← login/logout/me
+│   │   ├── PlayerController.php        ← público: index (paginado), show
+│   │   ├── PeladaController.php        ← público: index (paginado), show, byDate
+│   │   ├── TeamController.php          ← público: fields/players/organized/players-with-statistics (somente leitura)
+│   │   ├── StatisticsController.php    ← público: delega tudo para StatisticsService
+│   │   └── Admin/                      ← TODO controller aqui exige auth:sanctum + admin
+│   │       ├── PlayerController.php    ← store/update/destroy
+│   │       ├── PeladaController.php    ← store/update/destroy
+│   │       ├── MatchPlayerController.php ← store/update/destroy/upsertByPlayerAndPelada
+│   │       └── TeamController.php      ← organizeManual/organizeAutomatic, delega para TeamOrganizerService
 │   ├── Middleware/
-│   │   └── AdminMiddleware.php       ← exige User autenticado com profile === 'admin'
-│   ├── Requests/        ← Form Requests de validação (Store*/Update*)
-│   └── Resources/       ← serialização de resposta (JsonResource)
-├── Models/               ← Eloquent models (ver project-context.md)
-└── Providers/
+│   │   └── AdminMiddleware.php         ← exige User autenticado com profile === 'admin'
+│   ├── Requests/                       ← Form Requests de validação (Store*/Update*)
+│   └── Resources/                      ← serialização de resposta (JsonResource)
+├── Services/
+│   ├── TeamOrganizerService.php        ← organização manual e automática de times (transacional)
+│   └── StatisticsService.php           ← cálculo de rankings e estatísticas
+├── Exceptions/
+│   └── InsufficientGoalkeepersException.php  ← exception "renderable" (define seu próprio render(), retorna 400)
+└── Models/                             ← Eloquent models (ver project-context.md)
 ```
+
+## Convenção de exceptions de domínio
+
+Quando uma regra de negócio precisa interromper um fluxo com um erro específico (não um 404 simples de "recurso não encontrado", que continua sendo tratado inline no controller com `$this->errorResponse(...)`), prefira uma exception própria em `app/Exceptions/` que define seu próprio método `render(Request $request)` retornando o JSON no formato padrão do projeto (`{ "message": ..., "error": ... }`). Isso evita `try/catch` espalhado pelos controllers — a exception se resolve sozinha via o mecanismo de exception rendering do Laravel. Veja `InsufficientGoalkeepersException` como modelo.
 
 ## Pontos notáveis da arquitetura atual
 
-- `AdminController` concentra CRUD de `Player`, `Pelada` e `MatchPlayer`, além de `organizeTeams`. Se crescer mais, pode fazer sentido separar por domínio — mas isso é decisão do usuário, não faça sozinho.
-- `TeamController` e o método `organizeTeams` de `AdminController` implementam **duas lógicas de organização de times diferentes**: uma automática (distribui goleiros/linha por índice) e outra manual (recebe `team_assignments` explícitos do cliente). Não assuma que são intercambiáveis — veja [contexts/teams.md](contexts/teams.md).
-- `Controller::errorResponse()` é o único helper compartilhado entre controllers; é a convenção para respostas de erro.
+- **Toda rota de escrita/gestão está sob `Admin\*`** — não existe mais um controller único concentrando várias áreas (o antigo `AdminController` "God controller" foi decomposto por domínio).
+- **Duas formas de organizar times** continuam existindo (manual via `team_assignments` explícitos, e automática via `player_ids` + distribuição do sistema) — isso é intencional (são dois casos de uso reais), mas agora **compartilham `TeamOrganizerService`**, então a lógica de limpar times antigos, transação e distribuição de goleiros é uma só, usada pelos dois fluxos.
+- `Controller::errorResponse()` e `Controller::perPage()` (base `app/Http/Controllers/Controller.php`) são os helpers compartilhados entre controllers — para erros e paginação, respectivamente.
 - Sem camada de autorização via Policies/Gates — autorização é feita inteiramente pelo middleware `admin` a nível de rota.
 - Sem eventos, jobs ou filas customizados atualmente.
+- `Player` e `Pelada` usam `SoftDeletes` — ao adicionar queries novas nesses models, lembre que registros deletados já ficam automaticamente fora do resultado (comportamento padrão do Eloquent), então não é necessário filtrar manualmente.

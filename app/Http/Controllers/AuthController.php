@@ -19,7 +19,7 @@ class AuthController extends Controller
 
         $user = User::where('username', $request->username)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return $this->errorResponse('Credenciais inválidas.', 401);
         }
 
@@ -45,7 +45,7 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return $this->errorResponse('Não autenticado.', 401);
         }
 

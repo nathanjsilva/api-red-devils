@@ -1,49 +1,42 @@
 # Context: Estatísticas de Jogador na Partida (Match Players)
 
-`MatchPlayer` é o registro pivô que guarda o desempenho de um `Player` numa `Pelada` específica: gols, assistências, gols sofridos (goleiro), vitória/derrota/empate.
+`MatchPlayer` é o registro pivô que guarda o desempenho de um `Player` numa `Pelada` específica: gols, assistências, gols sofridos (goleiro), e o resultado da partida para aquele jogador.
 
 ## Arquivos envolvidos
 
-- `app/Http/Controllers/AdminController.php` (`storeMatchPlayer`, `updateMatchPlayer`, `updateMatchPlayerByPlayerAndPelada`, `deleteMatchPlayer`) — **controller efetivamente roteado**
-- `app/Http/Controllers/MatchPlayerController.php` — **existe mas não está em `routes/api.php`**, ver aviso abaixo
+- `app/Http/Controllers/Admin/MatchPlayerController.php` (`store`, `update`, `destroy`, `upsertByPlayerAndPelada`) — único controller de match-players, todas as rotas exigem admin
 - `app/Models/MatchPlayer.php`
 - `app/Http/Requests/StoreMatchPlayerRequest.php`, `UpdateMatchPlayerRequest.php`
 - `app/Http/Resources/MatchPlayerResource.php`
-- `database/migrations/2026_03_18_124000_create_match_players_table.php`, `2026_04_30_120000_add_goalkeeper_goal_support_comments_to_match_players_table.php`
+- `database/migrations/2026_03_18_124000_create_match_players_table.php`, `2026_04_30_120000_add_goalkeeper_goal_support_comments_to_match_players_table.php`, `2026_07_12_130100_consolidate_result_column_on_match_players_table.php`
 
-## ⚠️ Controller órfão
+O antigo controller órfão (`MatchPlayerController` no namespace raiz, que existia mas não estava roteado) foi removido no refactor de arquitetura — toda a lógica de match-players vive agora em `Admin\MatchPlayerController`, devidamente roteada.
 
-`MatchPlayerController` tem `store`/`update`/`destroy` mas **nenhuma rota em `routes/api.php` aponta para ele**. As rotas ativas de match-players usam `AdminController`. Antes de alterar lógica de estatísticas, confirme com o usuário se:
-- a intenção é editar o fluxo real (`AdminController`), ou
-- ele quer finalmente rotear `MatchPlayerController` (possível refatoração pendente/esquecida), ou
-- `MatchPlayerController` deve ser removido por estar morto.
-
-Não decida sozinho — pergunte.
-
-## Rotas ativas (grupo admin)
+## Rotas (todas admin)
 
 | Rota | Método |
 |---|---|
-| `POST /api/admin/match-players` | `AdminController::storeMatchPlayer` |
-| `PUT /api/admin/match-players/{id}` | `AdminController::updateMatchPlayer` |
-| `DELETE /api/admin/match-players/{id}` | `AdminController::deleteMatchPlayer` |
-| `PUT /api/admin/peladas/{peladaId}/players/{playerId}/statistics` | `AdminController::updateMatchPlayerByPlayerAndPelada` — usa `updateOrCreate` por par (`player_id`, `pelada_id`) |
+| `POST /api/admin/match-players` | `Admin\MatchPlayerController::store` |
+| `PUT /api/admin/match-players/{id}` | `Admin\MatchPlayerController::update` |
+| `DELETE /api/admin/match-players/{id}` | `Admin\MatchPlayerController::destroy` |
+| `PUT /api/admin/peladas/{peladaId}/players/{playerId}/statistics` | `Admin\MatchPlayerController::upsertByPlayerAndPelada` — usa `updateOrCreate` por par (`player_id`, `pelada_id`) |
 
 ## Campos e validação
 
 - `player_id`: obrigatório (create) / `sometimes` (update), deve existir em `players`.
 - `pelada_id`: obrigatório (create) / `sometimes` (update), deve existir em `peladas`.
-- `goals`, `assists`, `goals_conceded`: `nullable|integer|min:0`. Desde a migration `2026_04_30_...`, as colunas correspondentes no banco também são `NULL`-áveis (antes provavelmente não eram — checar histórico se precisar entender o "porquê").
-- `is_winner`: `nullable|boolean` (legado).
-- `result`: `nullable|in:win,loss,draw` (campo mais novo, substituindo/complementando `is_winner`).
+- `goals`, `assists`, `goals_conceded`: `nullable|integer|min:0`.
+- `result`: **obrigatório** (`required|in:win,loss,draw`) na criação; `sometimes|in:win,loss,draw` na atualização. É o **único** campo de resultado — `is_winner` foi removido da tabela (ver abaixo).
 
-## Regra de negócio: `result` vs `is_winner`
+## `result` é a única fonte de verdade (campo `is_winner` foi removido)
 
-O código mantém os dois campos por compatibilidade. Em várias leituras (`MatchPlayerResource`, `StatisticsController`), o padrão é:
-```php
-$result = $matchPlayer->result ?? ($matchPlayer->is_winner ? 'win' : 'loss');
-```
-Ou seja, **`result` tem prioridade; se nulo, cai para `is_winner`**. Empate (`draw`) só existe via `result` — `is_winner` sozinho não representa empate. Ao criar/atualizar registros, prefira sempre popular `result` explicitamente em vez de depender só de `is_winner`.
+Até a migration `2026_07_12_130100_consolidate_result_column_on_match_players_table.php`, a tabela tinha dois campos redundantes (`is_winner` boolean legado + `result` enum), com lógica de fallback duplicada espalhada por vários arquivos (`?? ($is_winner ? 'win' : 'loss')`, inclusive em SQL bruto nos rankings). Isso foi consolidado:
+
+- A coluna `is_winner` **não existe mais** no banco.
+- `result` é `NOT NULL` no banco (default `'loss'`, usado apenas como salvaguarda de migração — todo código novo deve sempre enviar `result` explicitamente).
+- `MatchPlayerResource` ainda expõe `is_winner` na resposta JSON, mas como **campo derivado** (`$this->result === 'win'`), calculado na hora, sem coluna correspondente — mantido só por compatibilidade de leitura para quem já consumia esse campo.
+
+Se precisar adicionar um novo estado de resultado no futuro, mude apenas o enum `result` (`ENUM('win','loss','draw')` no banco + `in:win,loss,draw` nas validações) — não reintroduza um segundo campo paralelo.
 
 ## Regras de validação cruzada (`withValidator`)
 
@@ -52,4 +45,4 @@ Ou seja, **`result` tem prioridade; se nulo, cai para `is_winner`**. Empate (`dr
 
 ## Ao alterar
 
-- Mudanças em como `result`/`is_winner` se relacionam afetam `StatisticsController` inteiro (todas as queries `SUM(CASE WHEN result = "win" OR (result IS NULL AND is_winner = 1) ...)`) — veja [contexts/statistics.md](statistics.md) antes de mudar esse campo.
+- Como `result` é `NOT NULL` no banco, não é mais necessário nenhum fallback (`?? ...`) ao ler esse campo em novos códigos — pode confiar que sempre existe um valor válido.

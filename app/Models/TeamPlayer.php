@@ -24,4 +24,3 @@ class TeamPlayer extends Model
         return $this->belongsTo(Player::class);
     }
 }
-

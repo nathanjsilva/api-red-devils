@@ -23,8 +23,8 @@ class MatchPlayerResource extends JsonResource
             'goals' => $this->goals,
             'assists' => $this->assists,
             'goals_conceded' => $this->goals_conceded,
-            'is_winner' => $this->is_winner,
-            'result' => $this->result ?? ($this->is_winner ? 'win' : 'loss'),
+            'result' => $this->result,
+            'is_winner' => $this->result === 'win',
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

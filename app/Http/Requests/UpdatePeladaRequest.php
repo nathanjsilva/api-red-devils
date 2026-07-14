@@ -23,6 +23,10 @@ class UpdatePeladaRequest extends FormRequest
     {
         return [
             'date' => 'sometimes|date',
+            'location' => 'sometimes|string|max:255',
+            'qtd_times' => 'sometimes|integer|min:2|max:10',
+            'qtd_jogadores_por_time' => 'sometimes|integer|min:5|max:15',
+            'qtd_goleiros' => 'sometimes|integer|min:2|max:10',
         ];
     }
 
@@ -34,8 +38,13 @@ class UpdatePeladaRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'date.date'             => 'A data deve ter um formato válido.',
-            'date.after_or_equal'   => 'A data não pode ser anterior a hoje.',
+            'date.date' => 'A data deve ter um formato válido.',
+            'qtd_times.min' => 'Deve ter pelo menos 2 times.',
+            'qtd_times.max' => 'Máximo de 10 times.',
+            'qtd_jogadores_por_time.min' => 'Mínimo de 5 jogadores por time.',
+            'qtd_jogadores_por_time.max' => 'Máximo de 15 jogadores por time.',
+            'qtd_goleiros.min' => 'Mínimo de 2 goleiros.',
+            'qtd_goleiros.max' => 'Máximo de 10 goleiros.',
         ];
     }
 }

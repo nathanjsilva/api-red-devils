@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\Player;
 use App\Models\Pelada;
+use App\Models\Player;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -24,7 +24,7 @@ class MatchPlayerFactory extends Factory
             'goals' => fake()->numberBetween(0, 5),
             'assists' => fake()->numberBetween(0, 3),
             'goals_conceded' => fake()->numberBetween(0, 3),
-            'is_winner' => fake()->boolean(),
+            'result' => fake()->randomElement(['win', 'loss', 'draw']),
         ];
     }
 
@@ -35,6 +35,7 @@ class MatchPlayerFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $goleiro = Player::factory()->goleiro()->create();
+
             return [
                 'player_id' => $goleiro->id,
                 'goals_conceded' => fake()->numberBetween(0, 5),
@@ -49,6 +50,7 @@ class MatchPlayerFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $linha = Player::factory()->linha()->create();
+
             return [
                 'player_id' => $linha->id,
                 'goals_conceded' => null,
@@ -62,7 +64,7 @@ class MatchPlayerFactory extends Factory
     public function winner(): static
     {
         return $this->state(fn (array $attributes) => [
-            'is_winner' => true,
+            'result' => 'win',
         ]);
     }
 
@@ -72,7 +74,7 @@ class MatchPlayerFactory extends Factory
     public function loser(): static
     {
         return $this->state(fn (array $attributes) => [
-            'is_winner' => false,
+            'result' => 'loss',
         ]);
     }
 }
