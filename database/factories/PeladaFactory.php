@@ -16,8 +16,11 @@ class PeladaFactory extends Factory
      */
     public function definition(): array
     {
+        $date = fake()->dateTimeBetween('now', '+1 year');
+
         return [
-            'date' => fake()->dateTimeBetween('now', '+1 year')->format('Y-m-d'),
+            'date' => $date->format('Y-m-d'),
+            'division' => (int) $date->format('N') === 6 ? 'sabado' : 'quinta',
             'location' => fake()->streetAddress(),
             'qtd_times' => fake()->numberBetween(2, 4),
             'qtd_jogadores_por_time' => fake()->numberBetween(6, 10),
@@ -42,6 +45,26 @@ class PeladaFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'date' => $date,
+        ]);
+    }
+
+    /**
+     * Cria uma pelada da divisão de quinta-feira.
+     */
+    public function quinta(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'division' => 'quinta',
+        ]);
+    }
+
+    /**
+     * Cria uma pelada da divisão de sábado.
+     */
+    public function sabado(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'division' => 'sabado',
         ]);
     }
 }

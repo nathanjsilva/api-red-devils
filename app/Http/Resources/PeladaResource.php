@@ -17,6 +17,7 @@ class PeladaResource extends JsonResource
         return [
             'id' => $this->id,
             'date' => $this->date ? (is_string($this->date) ? $this->date : $this->date->format('Y-m-d')) : null,
+            'division' => $this->division,
             'location' => $this->location,
             'qtd_times' => $this->qtd_times,
             'qtd_jogadores_por_time' => $this->qtd_jogadores_por_time,

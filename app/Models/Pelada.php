@@ -12,6 +12,7 @@ class Pelada extends Model
 
     protected $fillable = [
         'date',
+        'division',
         'location',
         'qtd_times',
         'qtd_jogadores_por_time',

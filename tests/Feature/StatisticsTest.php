@@ -7,6 +7,7 @@ use App\Models\Pelada;
 use App\Models\Player;
 use App\Models\Team;
 use App\Models\TeamPlayer;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -14,9 +15,22 @@ class StatisticsTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function pelada(string $monthDay): Pelada
+    private function pelada(string $monthDay, ?string $division = null): Pelada
     {
-        return Pelada::factory()->create(['date' => now()->year.'-'.$monthDay]);
+        $date = now()->year.'-'.$monthDay;
+        $division ??= (int) date('N', strtotime($date)) === 6 ? 'sabado' : 'quinta';
+
+        return Pelada::factory()->create(['date' => $date, 'division' => $division]);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function weekdayDates(int $weekday, int $count): array
+    {
+        $date = Carbon::now()->startOfYear()->next($weekday);
+
+        return collect(range(0, $count - 1))->map(fn ($i) => $date->copy()->addWeeks($i)->format('Y-m-d'))->all();
     }
 
     private function matchPlayer(Player $player, Pelada $pelada, array $attributes = []): MatchPlayer
@@ -413,5 +427,66 @@ class StatisticsTest extends TestCase
         $this->assertNotNull($item);
         $this->assertSame(0, $item['goals']);
         $this->assertSame(0, $item['assists']);
+    }
+
+    public function test_division_filter_isolates_statistics_between_thursday_and_saturday(): void
+    {
+        $playerQuinta = Player::factory()->linha()->create();
+        $playerSabado = Player::factory()->linha()->create();
+
+        $quintaDates = $this->weekdayDates(Carbon::THURSDAY, 2);
+        $sabadoDate = $this->weekdayDates(Carbon::SATURDAY, 1)[0];
+
+        $peladaQ1 = Pelada::factory()->create(['date' => $quintaDates[0], 'division' => 'quinta']);
+        $peladaQ2 = Pelada::factory()->create(['date' => $quintaDates[1], 'division' => 'quinta']);
+        $peladaS1 = Pelada::factory()->create(['date' => $sabadoDate, 'division' => 'sabado']);
+
+        $this->matchPlayer($playerQuinta, $peladaQ1, ['goals' => 3, 'result' => 'win']);
+        $this->matchPlayer($playerQuinta, $peladaQ2, ['goals' => 1, 'result' => 'win']);
+        $this->matchPlayer($playerSabado, $peladaS1, ['goals' => 5, 'result' => 'win']);
+
+        $quinta = $this->getJson('/api/statistics/dashboard?division=quinta&year='.now()->year)->json('data');
+        $this->assertSame(2, $quinta['total_peladas']);
+        $this->assertSame(4, $quinta['total_goals']);
+        $this->assertSame($playerQuinta->id, $quinta['top_scorer']['player']['id']);
+
+        $sabado = $this->getJson('/api/statistics/dashboard?division=sabado&year='.now()->year)->json('data');
+        $this->assertSame(1, $sabado['total_peladas']);
+        $this->assertSame(5, $sabado['total_goals']);
+        $this->assertSame($playerSabado->id, $sabado['top_scorer']['player']['id']);
+
+        $combined = $this->getJson('/api/statistics/dashboard?year='.now()->year)->json('data');
+        $this->assertSame(3, $combined['total_peladas']);
+        $this->assertSame(9, $combined['total_goals']);
+    }
+
+    public function test_minimum_matches_is_computed_separately_per_division(): void
+    {
+        $player = Player::factory()->linha()->create();
+
+        // 10 peladas de quinta => minimo na divisão quinta = ceil(10*0.2) = 2.
+        $quintaDates = $this->weekdayDates(Carbon::THURSDAY, 10);
+        foreach ($quintaDates as $date) {
+            Pelada::factory()->create(['date' => $date, 'division' => 'quinta']);
+        }
+
+        // 2 peladas de sábado => minimo na divisão sabado = ceil(2*0.2) = 1.
+        $sabadoDates = $this->weekdayDates(Carbon::SATURDAY, 2);
+        $peladaS1 = Pelada::factory()->create(['date' => $sabadoDates[0], 'division' => 'sabado']);
+        Pelada::factory()->create(['date' => $sabadoDates[1], 'division' => 'sabado']);
+
+        // O jogador só disputou 1 das 10 peladas de quinta (abaixo do mínimo de 2).
+        $this->matchPlayer($player, Pelada::where('date', $quintaDates[0])->first(), ['goals' => 5, 'result' => 'win']);
+
+        // E disputou 1 das 2 peladas de sábado (dentro do mínimo de 1 daquela divisão).
+        $this->matchPlayer($player, $peladaS1, ['goals' => 5, 'result' => 'win']);
+
+        $quintaRanking = $this->getJson('/api/statistics/rankings/goals?division=quinta&year='.now()->year);
+        $this->assertSame(2, $quintaRanking->json('meta.minimum_matches'));
+        $this->assertFalse(collect($quintaRanking->json('data'))->pluck('player.id')->contains($player->id));
+
+        $sabadoRanking = $this->getJson('/api/statistics/rankings/goals?division=sabado&year='.now()->year);
+        $this->assertSame(1, $sabadoRanking->json('meta.minimum_matches'));
+        $this->assertTrue(collect($sabadoRanking->json('data'))->pluck('player.id')->contains($player->id));
     }
 }

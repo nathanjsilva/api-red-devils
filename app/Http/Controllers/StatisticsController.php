@@ -268,6 +268,7 @@ class StatisticsController extends Controller
             'meta' => [
                 'pelada_id' => $pelada->id,
                 'date' => $pelada->date,
+                'division' => $pelada->division,
             ],
         ]);
     }
@@ -305,18 +306,22 @@ class StatisticsController extends Controller
     }
 
     /**
-     * Extrai os filtros de período aceitos pelos endpoints de estatísticas
-     * (start_date, end_date, year, month) a partir da query string.
+     * Extrai os filtros de período e divisão aceitos pelos endpoints de
+     * estatísticas (start_date, end_date, year, month, division) a partir da
+     * query string. `division` inválida (fora de quinta/sabado) é ignorada.
      *
      * @return array<string, string>
      */
     private function filtersFromRequest(Request $request): array
     {
+        $division = $request->query('division');
+
         return array_filter([
             'start_date' => $request->query('start_date'),
             'end_date' => $request->query('end_date'),
             'year' => $request->query('year'),
             'month' => $request->query('month'),
+            'division' => in_array($division, ['quinta', 'sabado'], true) ? $division : null,
         ], fn ($value) => $value !== null && $value !== '');
     }
 

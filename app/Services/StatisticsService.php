@@ -304,8 +304,10 @@ class StatisticsService
     }
 
     /**
-     * Aplica os filtros de período (start_date/end_date/year/month) numa query
-     * cuja tabela alvo tenha uma coluna de data (por padrão, `date`).
+     * Aplica os filtros de período (start_date/end_date/year/month) e de
+     * divisão (quinta/sábado) numa query cuja tabela alvo tenha uma coluna de
+     * data (por padrão, `date`). A coluna de divisão é derivada do mesmo
+     * prefixo de tabela/alias de `$column` (ex.: `p.date` -> `p.division`).
      */
     private function applyDateFilters($query, array $filters, string $column = 'date')
     {
@@ -323,6 +325,11 @@ class StatisticsService
 
         if (! empty($filters['month'])) {
             $query->whereMonth($column, $filters['month']);
+        }
+
+        if (! empty($filters['division'])) {
+            $prefix = str_contains($column, '.') ? substr($column, 0, strrpos($column, '.') + 1) : '';
+            $query->where($prefix.'division', $filters['division']);
         }
 
         return $query;

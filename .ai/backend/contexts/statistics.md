@@ -49,7 +49,15 @@ O controller só resolve 404 (`Player`/`Pelada` inexistente), extrai filtros da 
 
 ## Filtros aceitos (nos endpoints novos)
 
-`start_date`, `end_date`, `year`, `month` — aplicados via `StatisticsService::applyDateFilters()` sobre a data da pelada. `minimum_matches` (rankings/goalkeepers/recent-form) sobrescreve o mínimo calculado. `limit` é usado por `evolution` (número de períodos) e `recent-form` (top N jogadores) — os rankings continuam paginados por `per_page` (padrão já existente do projeto), não por `limit`.
+`start_date`, `end_date`, `year`, `month`, `division` — aplicados via `StatisticsService::applyDateFilters()` sobre a data (e, se `division` vier, também sobre a coluna `division`) da pelada. `minimum_matches` (rankings/goalkeepers/recent-form) sobrescreve o mínimo calculado. `limit` é usado por `evolution` (número de períodos) e `recent-form` (top N jogadores) — os rankings continuam paginados por `per_page` (padrão já existente do projeto), não por `limit`.
+
+### `division` (quinta/sábado)
+
+`?division=quinta` ou `?division=sabado` filtra **todas** as estatísticas (dashboard, os 7 rankings completos, `players/{player}`, `compare`, `goalkeepers`, `evolution`, `recent-form`, `matches/{match}` via `meta.division`, melhor dupla) para considerar só peladas daquela divisão. Valor fora desse conjunto é **ignorado silenciosamente** (`StatisticsController::filtersFromRequest`), mesmo padrão de tolerância dos demais filtros de período (que também não são validados estritamente). Sem `division`, o comportamento é o combinado (todas as divisões juntas) — nenhuma mudança para quem já consome os endpoints sem esse parâmetro.
+
+**O piso de 20% (`minimumMatchesForScope`) é recalculado por divisão quando o filtro é usado** — como o cálculo já conta `Pelada::query()` aplicando os mesmos filtros, isso "cai de graça" ao adicionar `division` em `applyDateFilters()`, sem precisar de nenhuma lógica extra por endpoint. Um jogador pode ser elegível num ranking filtrado por `division=sabado` e não ser no `division=quinta` (ou no combinado), dependendo de quantas partidas jogou em cada uma.
+
+A implementação da coluna `division` em si (schema, validação de criação/edição) está documentada em [contexts/peladas.md](peladas.md).
 
 Quando nenhum filtro de período é passado, os endpoints novos **não** assumem "ano corrente" por padrão (diferente da regra antiga) — operam sobre todo o histórico, a menos que `year`/`start_date`/`end_date` seja informado.
 
@@ -88,7 +96,7 @@ Consultas agregadas pesadas (dashboard, os 7 rankings completos, goleiros, evolu
 
 ## Testes
 
-`tests/Feature/StatisticsTest.php` cobre: agregados do dashboard (com caso de divisão por zero), ordenação e desempate do ranking de gols, exclusão por `minimum_matches`, `minimum_matches` como override explícito, ranking de presenças sem piso, streaks/percentuais/assiduidade do jogador individual, classificação de tendência da forma recente, normalização do radar de comparação, validação do comparador (mínimo de 2 jogadores), resultado de times e diferença de gols em `matches/{match}`, agrupamento de evolução por mês/ano, melhor dupla, listagem de goleiros e o tratamento de `NULL` em gols/assistências.
+`tests/Feature/StatisticsTest.php` cobre: agregados do dashboard (com caso de divisão por zero), ordenação e desempate do ranking de gols, exclusão por `minimum_matches`, `minimum_matches` como override explícito, ranking de presenças sem piso, streaks/percentuais/assiduidade do jogador individual, classificação de tendência da forma recente, normalização do radar de comparação, validação do comparador (mínimo de 2 jogadores), resultado de times e diferença de gols em `matches/{match}`, agrupamento de evolução por mês/ano, melhor dupla, listagem de goleiros, o tratamento de `NULL` em gols/assistências, isolamento de estatísticas por `division` e o mínimo de 20% calculado separadamente por divisão. `tests/Feature/PeladaDivisionTest.php` cobre a validação de `division`/dia da semana no `Store`/`UpdatePeladaRequest`.
 
 **Infraestrutura de testes recriada:** `phpunit.xml` não existia no repositório (removido num commit antigo) e `phpunit/phpunit`/`mockery/mockery` não estavam em `require-dev`; ambos foram adicionados. Os testes rodam contra um banco MySQL dedicado (`laravel_testing`, no mesmo container Docker do projeto) em vez de SQLite, porque duas migrations existentes (`add_goalkeeper_goal_support_comments...`, `consolidate_result_column...`) usam `ALTER TABLE ... MODIFY` (sintaxe exclusiva do MySQL) e não rodam em SQLite.
 
