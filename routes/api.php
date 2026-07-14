@@ -31,12 +31,23 @@ Route::prefix('statistics')->group(function () {
     Route::get('player/{playerId}/pelada/{peladaId}', [StatisticsController::class, 'playerInPelada']);
     Route::get('player/{playerId}/total', [StatisticsController::class, 'playerTotalStatistics']);
     Route::get('players/overview', [StatisticsController::class, 'playersOverview']);
+    Route::get('players/compare', [StatisticsController::class, 'comparePlayers']);
+    Route::get('players/{player}', [StatisticsController::class, 'playerStatistics']);
     Route::get('rankings/wins', [StatisticsController::class, 'winsRanking']);
     Route::get('rankings/goals', [StatisticsController::class, 'goalsRanking']);
     Route::get('rankings/assists', [StatisticsController::class, 'assistsRanking']);
     Route::get('rankings/goal-participation', [StatisticsController::class, 'goalParticipationRanking']);
+    Route::get('rankings/goal-participations', [StatisticsController::class, 'goalParticipationsRanking']);
+    Route::get('rankings/win-rate', [StatisticsController::class, 'winRateRanking']);
+    Route::get('rankings/appearances', [StatisticsController::class, 'appearancesRanking']);
     Route::get('rankings/goalkeepers', [StatisticsController::class, 'goalkeepersRanking']);
+    Route::get('goalkeepers', [StatisticsController::class, 'goalkeepers']);
+    Route::get('goalkeepers/{player}', [StatisticsController::class, 'goalkeeperStatistics']);
     Route::get('pelada/{peladaId}', [StatisticsController::class, 'peladaStatistics']);
+    Route::get('matches/{match}', [StatisticsController::class, 'matchStatistics']);
+    Route::get('dashboard', [StatisticsController::class, 'dashboard']);
+    Route::get('evolution', [StatisticsController::class, 'evolution']);
+    Route::get('recent-form', [StatisticsController::class, 'recentForm']);
 });
 
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
