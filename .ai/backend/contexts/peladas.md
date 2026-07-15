@@ -17,14 +17,18 @@
 
 | Rota | Auth | Controller/Método |
 |---|---|---|
-| `GET /api/peladas` | **pública**, paginada | `PeladaController::index` — com `matchPlayers` carregados |
+| `GET /api/peladas` | **pública**, paginada | `PeladaController::index` — com `matchPlayers` carregados, aceita `?division=quinta\|sabado` |
 | `GET /api/peladas/{id}` | **pública** | `PeladaController::show` |
-| `GET /api/peladas/date/{date}` | **pública** | `PeladaController::byDate` — 404 se nenhuma encontrada |
+| `GET /api/peladas/date/{date}` | **pública** | `PeladaController::byDate` — 404 se nenhuma encontrada, aceita `?division=quinta\|sabado` |
 | `POST /api/admin/peladas` | admin | `Admin\PeladaController::store` |
 | `PUT /api/admin/peladas/{id}` | admin | `Admin\PeladaController::update` |
 | `DELETE /api/admin/peladas/{id}` | admin | `Admin\PeladaController::destroy` (**soft delete**) |
 
 As rotas de leitura eram admin-only antes do refactor de arquitetura; foram abertas ao público (mesmo padrão de `players`) porque um jogador comum precisa conseguir consultar a agenda de peladas e os times sem ter conta de admin. Só escrita continua exigindo admin.
+
+### Filtro `division` na listagem
+
+`GET /api/peladas` e `GET /api/peladas/date/{date}` aceitam `?division=quinta` ou `?division=sabado` opcional (`PeladaController::divisionFromRequest()`), mesmo padrão tolerante do `StatisticsController::filtersFromRequest()`: valor fora desse conjunto é ignorado silenciosamente, e sem o parâmetro as duas divisões continuam vindo misturadas (nenhuma mudança de comportamento para quem já consome essas rotas sem o filtro).
 
 ## Campos e validação
 
