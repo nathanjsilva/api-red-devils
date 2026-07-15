@@ -39,6 +39,7 @@
 | `GET /api/statistics/goalkeepers/{player}` | `goalkeeperStatistics` | não |
 | `GET /api/statistics/matches/{match}` | `matchStatistics` | não |
 | `GET /api/statistics/evolution` | `evolution` | não (lista de períodos) |
+| `GET /api/statistics/peladas-per-month` | `peladasPerMonth` | não (lista de meses) |
 | `GET /api/statistics/recent-form` | `recentForm` | não (lista, limitada por `limit`) |
 
 **⚠️ Mudança de contrato deliberada:** os endpoints `rankings/goals`, `rankings/assists`, `rankings/wins` e `rankings/goalkeepers` **já existiam** com o mesmo path. Como o pedido do usuário especificou literalmente esses mesmos paths para o novo formato enriquecido (posição, jogos, gols, assistências, participações, vitórias, aproveitamento, média por jogo, valor principal), não havia como manter duas rotas com o mesmo método+path — o controller e o envelope de resposta desses 4 endpoints foram **substituídos** pelo novo formato (`data`/`meta`), e os métodos antigos correspondentes em `StatisticsService` (`goalsRanking`, `assistsRanking`, `winsRanking`, `goalkeepersRanking`) ficaram **sem uso**, preservados no arquivo (não foram apagados, por não haver autorização explícita para remover código). `rankings/goal-participation` (singular, formato antigo) continua intocado porque seu path não colide com o novo `goal-participations` (plural).
@@ -102,6 +103,7 @@ Consultas agregadas pesadas (dashboard, os 7 rankings completos, goleiros, evolu
 
 ## Ao alterar
 
+- `peladasPerMonth()` é uma versão enxuta de `evolution('month', ...)` — reaproveita a mesma query/cache e só remapeia a resposta para `period`/`total_peladas`, sem gols/assistências/jogadores. Existe porque o gráfico de "peladas por mês" no consumidor da API não precisa do resto dos campos de `evolution`. Se `evolution()` mudar o formato de `period` ou de `total_peladas`, `peladasPerMonth()` acompanha automaticamente.
 - Qualquer novo ranking "completo" deve reaproveitar `fullRankingBaseQuery()` + `paginateFullRanking()`.
 - Qualquer nova consulta agregada pesada deve usar `Cache::remember` seguindo o padrão de `cacheKey()`.
 - `peladaStatistics`/`GET /statistics/pelada/{peladaId}` (visão simples, sem filtro de ano/mínimo) continua existindo separado de `matchStatistics`/`GET /statistics/matches/{match}` (visão enriquecida, reaproveita `peladaStatistics` internamente e acrescenta líderes/times) — não confundir os dois.

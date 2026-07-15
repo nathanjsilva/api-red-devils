@@ -47,6 +47,7 @@ Route::prefix('statistics')->group(function () {
     Route::get('matches/{match}', [StatisticsController::class, 'matchStatistics']);
     Route::get('dashboard', [StatisticsController::class, 'dashboard']);
     Route::get('evolution', [StatisticsController::class, 'evolution']);
+    Route::get('peladas-per-month', [StatisticsController::class, 'peladasPerMonth']);
     Route::get('recent-form', [StatisticsController::class, 'recentForm']);
 });
 

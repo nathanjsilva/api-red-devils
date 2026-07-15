@@ -1091,6 +1091,24 @@ class StatisticsService
         );
     }
 
+    /**
+     * Versao enxuta de evolution('month', ...), so com a contagem de peladas
+     * por mes (sem gols/assistencias/jogadores), para alimentar grafico de
+     * peladas por mes.
+     *
+     * @return array<int, array{period: string, total_peladas: int}>
+     */
+    public function peladasPerMonth(array $filters, ?int $limit = null): array
+    {
+        return array_map(
+            fn (array $row) => [
+                'period' => $row['period'],
+                'total_peladas' => $row['total_peladas'],
+            ],
+            $this->evolution('month', $filters, $limit)
+        );
+    }
+
     public function goalkeepersOverview(array $filters, int $perPage): LengthAwarePaginator
     {
         return Cache::remember(

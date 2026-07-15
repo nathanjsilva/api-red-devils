@@ -288,6 +288,19 @@ class StatisticsController extends Controller
         ]);
     }
 
+    public function peladasPerMonth(Request $request): JsonResponse
+    {
+        $filters = $this->filtersFromRequest($request);
+        $limit = $request->query('limit') !== null ? (int) $request->query('limit') : null;
+
+        return response()->json([
+            'data' => $this->statistics->peladasPerMonth($filters, $limit),
+            'meta' => [
+                'filters' => $filters,
+            ],
+        ]);
+    }
+
     public function recentForm(Request $request): JsonResponse
     {
         $filters = $this->filtersFromRequest($request);
