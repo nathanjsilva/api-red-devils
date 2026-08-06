@@ -31,7 +31,7 @@ class StorePeladaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date' => 'required|date|after_or_equal:today',
+            'date' => 'required|date',
             'division' => 'required|in:quinta,sabado',
             'location' => 'required|string|max:255',
             'qtd_times' => 'required|integer|min:2|max:10',
@@ -50,7 +50,6 @@ class StorePeladaRequest extends FormRequest
         return [
             'date.required' => 'A data é obrigatória.',
             'date.date' => 'A data deve ter um formato válido.',
-            'date.after_or_equal' => 'A data não pode ser anterior a hoje.',
             'division.required' => 'A divisão é obrigatória.',
             'division.in' => 'Divisão deve ser: quinta ou sabado.',
             'location.required' => 'O local é obrigatório.',
