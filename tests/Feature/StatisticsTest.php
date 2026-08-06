@@ -171,6 +171,62 @@ class StatisticsTest extends TestCase
         $this->assertTrue($ids->contains($playerC->id));
     }
 
+    public function test_top_scorer_frequency_ranking_counts_how_many_times_each_player_led_a_pelada(): void
+    {
+        $playerA = Player::factory()->linha()->create(['name' => 'Aaron']);
+        $playerB = Player::factory()->linha()->create(['name' => 'Bruno']);
+
+        $peladaA = $this->pelada('06-01');
+        $peladaB = $this->pelada('06-08');
+        $peladaC = $this->pelada('06-15');
+
+        $this->matchPlayer($playerA, $peladaA, ['goals' => 3, 'result' => 'win']);
+        $this->matchPlayer($playerB, $peladaA, ['goals' => 1, 'result' => 'loss']);
+
+        $this->matchPlayer($playerA, $peladaB, ['goals' => 2, 'result' => 'win']);
+        $this->matchPlayer($playerB, $peladaB, ['goals' => 0, 'result' => 'loss']);
+
+        $this->matchPlayer($playerA, $peladaC, ['goals' => 1, 'result' => 'loss']);
+        $this->matchPlayer($playerB, $peladaC, ['goals' => 5, 'result' => 'win']);
+
+        $response = $this->getJson('/api/statistics/rankings/top-scorer-frequency?year='.now()->year);
+
+        $response->assertOk();
+        $data = collect($response->json('data'));
+
+        $leaderA = $data->firstWhere('player.id', $playerA->id);
+        $leaderB = $data->firstWhere('player.id', $playerB->id);
+
+        $this->assertSame(2, $leaderA['value']);
+        $this->assertSame(3, $leaderA['matches']);
+        $this->assertSame(1, $leaderB['value']);
+        $this->assertSame(3, $leaderB['matches']);
+        $this->assertSame($playerA->id, $data->first()['player']['id']);
+    }
+
+    public function test_top_assister_frequency_ranking_breaks_ties_by_player_name(): void
+    {
+        $playerZ = Player::factory()->linha()->create(['name' => 'Zeca']);
+        $playerA = Player::factory()->linha()->create(['name' => 'Ademir']);
+
+        $pelada = $this->pelada('07-01');
+
+        // Empate em assistências: o critério de desempate (mesmo do artilheiro
+        // da pelada) deve escolher o nome em ordem alfabética, então só um dos
+        // dois pode ser contado como "garçom" dessa pelada.
+        $this->matchPlayer($playerZ, $pelada, ['assists' => 2, 'result' => 'win']);
+        $this->matchPlayer($playerA, $pelada, ['assists' => 2, 'result' => 'win']);
+
+        $response = $this->getJson('/api/statistics/rankings/top-assister-frequency?year='.now()->year);
+
+        $response->assertOk();
+        $data = collect($response->json('data'));
+
+        $this->assertCount(1, $data);
+        $this->assertSame($playerA->id, $data->first()['player']['id']);
+        $this->assertSame(1, $data->first()['value']);
+    }
+
     public function test_minimum_matches_query_parameter_overrides_the_computed_default(): void
     {
         $player = Player::factory()->linha()->create();

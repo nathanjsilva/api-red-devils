@@ -132,6 +132,22 @@ class StatisticsController extends Controller
         return $this->rankingEnvelope($paginator, $filters, $minimumOverride ?? 0, 'Presenças');
     }
 
+    public function topScorerFrequencyRanking(Request $request)
+    {
+        $filters = $this->filtersFromRequest($request);
+        $paginator = $this->statistics->topScorerFrequencyRankingFull($filters, $this->perPage($request));
+
+        return $this->rankingEnvelope($paginator, $filters, 0, 'Artilheiro da pelada');
+    }
+
+    public function topAssisterFrequencyRanking(Request $request)
+    {
+        $filters = $this->filtersFromRequest($request);
+        $paginator = $this->statistics->topAssisterFrequencyRankingFull($filters, $this->perPage($request));
+
+        return $this->rankingEnvelope($paginator, $filters, 0, 'Garçom da pelada');
+    }
+
     public function goalkeepersRanking(Request $request)
     {
         $filters = $this->filtersFromRequest($request);

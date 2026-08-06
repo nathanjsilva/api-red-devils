@@ -40,6 +40,8 @@ Route::prefix('statistics')->group(function () {
     Route::get('rankings/goal-participations', [StatisticsController::class, 'goalParticipationsRanking']);
     Route::get('rankings/win-rate', [StatisticsController::class, 'winRateRanking']);
     Route::get('rankings/appearances', [StatisticsController::class, 'appearancesRanking']);
+    Route::get('rankings/top-scorer-frequency', [StatisticsController::class, 'topScorerFrequencyRanking']);
+    Route::get('rankings/top-assister-frequency', [StatisticsController::class, 'topAssisterFrequencyRanking']);
     Route::get('rankings/goalkeepers', [StatisticsController::class, 'goalkeepersRanking']);
     Route::get('goalkeepers', [StatisticsController::class, 'goalkeepers']);
     Route::get('goalkeepers/{player}', [StatisticsController::class, 'goalkeeperStatistics']);

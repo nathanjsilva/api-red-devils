@@ -530,6 +530,103 @@ class StatisticsService
         );
     }
 
+    /**
+     * Para cada pelada (respeitando os filtros), identifica o jogador líder
+     * numa métrica (`goals`/`assists`) usando o mesmo critério de desempate de
+     * `pickLeaderInMatch` (maior valor, depois nome do jogador), e conta quantas
+     * vezes cada jogador foi o líder. Uma única query agregada, sem N+1.
+     */
+    private function peladaLeaderFrequency(array $filters, string $metricColumn): \Illuminate\Support\Collection
+    {
+        $ranked = DB::table('match_players as mp')
+            ->join('players as pl', 'pl.id', '=', 'mp.player_id')
+            ->join('peladas as p', function ($join) {
+                $join->on('p.id', '=', 'mp.pelada_id')->whereNull('p.deleted_at');
+            })
+            ->tap(fn ($q) => $this->applyDateFilters($q, $filters, 'p.date'))
+            ->where("mp.{$metricColumn}", '>', 0)
+            ->selectRaw("
+                mp.pelada_id,
+                mp.player_id,
+                ROW_NUMBER() OVER (PARTITION BY mp.pelada_id ORDER BY mp.{$metricColumn} DESC, pl.name ASC) as rn
+            ");
+
+        return DB::query()->fromSub($ranked, 'ranked')
+            ->where('rn', 1)
+            ->selectRaw('player_id, COUNT(*) as times_leader')
+            ->groupBy('player_id')
+            ->get()
+            ->keyBy('player_id');
+    }
+
+    /**
+     * Pagina o ranking de "quantas vezes o jogador foi o líder da pelada" numa
+     * métrica, cruzando com o total de presenças do jogador no mesmo escopo.
+     * Formato de item compatível com `paginateFullRanking` (position/player/
+     * matches/value/average_per_match) para reaproveitar o parser do frontend.
+     */
+    private function paginateLeaderFrequencyRanking(array $filters, int $perPage, string $metricColumn): LengthAwarePaginator
+    {
+        $frequencies = $this->peladaLeaderFrequency($filters, $metricColumn);
+        $playerIds = $frequencies->keys();
+
+        $appearances = $this->fullRankingBaseQuery($filters)
+            ->whereIn('player_id', $playerIds)
+            ->get()
+            ->keyBy('player_id');
+
+        $players = Player::whereIn('id', $playerIds)->get()->keyBy('id');
+
+        $items = $frequencies->map(function ($row, $playerId) use ($appearances, $players) {
+            $player = $players->get($playerId);
+            $matches = (int) ($appearances->get($playerId)->total_matches ?? 0);
+            $timesLeader = (int) $row->times_leader;
+
+            return [
+                'player' => [
+                    'id' => $player->id,
+                    'name' => $player->name,
+                    'nickname' => $player->nickname,
+                    'position' => $player->position,
+                ],
+                'matches' => $matches,
+                'value' => $timesLeader,
+                'average_per_match' => $matches > 0 ? round($timesLeader / $matches * 100, 2) : 0.0,
+            ];
+        })->sortByDesc('value')->values();
+
+        $page = max(1, (int) request()->query('page', 1));
+        $slice = $items->slice(($page - 1) * $perPage, $perPage)->values()
+            ->map(function ($item, $index) use ($page, $perPage) {
+                $item['position'] = ($page - 1) * $perPage + $index + 1;
+
+                return $item;
+            });
+
+        return new \Illuminate\Pagination\LengthAwarePaginator($slice, $items->count(), $perPage, $page, [
+            'path' => request()->url(),
+            'query' => request()->query(),
+        ]);
+    }
+
+    public function topScorerFrequencyRankingFull(array $filters, int $perPage): LengthAwarePaginator
+    {
+        return Cache::remember(
+            $this->cacheKey('rankings.top_scorer_frequency', $filters + ['per_page' => $perPage, 'page' => request()->query('page', 1)]),
+            self::CACHE_TTL_SECONDS,
+            fn () => $this->paginateLeaderFrequencyRanking($filters, $perPage, 'goals')
+        );
+    }
+
+    public function topAssisterFrequencyRankingFull(array $filters, int $perPage): LengthAwarePaginator
+    {
+        return Cache::remember(
+            $this->cacheKey('rankings.top_assister_frequency', $filters + ['per_page' => $perPage, 'page' => request()->query('page', 1)]),
+            self::CACHE_TTL_SECONDS,
+            fn () => $this->paginateLeaderFrequencyRanking($filters, $perPage, 'assists')
+        );
+    }
+
     public function goalkeepersRankingFull(array $filters, int $perPage, ?int $minimumMatchesOverride = null): LengthAwarePaginator
     {
         return Cache::remember(
