@@ -545,4 +545,47 @@ class StatisticsTest extends TestCase
         $this->assertSame(1, $sabadoRanking->json('meta.minimum_matches'));
         $this->assertTrue(collect($sabadoRanking->json('data'))->pluck('player.id')->contains($player->id));
     }
+
+    public function test_players_overview_isolates_statistics_between_thursday_and_saturday(): void
+    {
+        $player = Player::factory()->linha()->create();
+
+        $peladaQuinta = $this->pelada('06-04', 'quinta');
+        $peladaSabado = $this->pelada('06-06', 'sabado');
+
+        $this->matchPlayer($player, $peladaQuinta, ['goals' => 3, 'assists' => 1, 'result' => 'win']);
+        $this->matchPlayer($player, $peladaSabado, ['goals' => 7, 'assists' => 2, 'result' => 'win']);
+
+        $quinta = $this->getJson('/api/statistics/players/overview?division=quinta&year='.now()->year);
+        $quintaStats = collect($quinta->json('players.data'))->firstWhere('player.id', $player->id);
+        $this->assertSame(1, $quintaStats['statistics']['total_matches']);
+        $this->assertSame(3, $quintaStats['statistics']['total_goals']);
+
+        $sabado = $this->getJson('/api/statistics/players/overview?division=sabado&year='.now()->year);
+        $sabadoStats = collect($sabado->json('players.data'))->firstWhere('player.id', $player->id);
+        $this->assertSame(1, $sabadoStats['statistics']['total_matches']);
+        $this->assertSame(7, $sabadoStats['statistics']['total_goals']);
+
+        $combined = $this->getJson('/api/statistics/players/overview?year='.now()->year);
+        $combinedStats = collect($combined->json('players.data'))->firstWhere('player.id', $player->id);
+        $this->assertSame(2, $combinedStats['statistics']['total_matches']);
+        $this->assertSame(10, $combinedStats['statistics']['total_goals']);
+    }
+
+    public function test_goalkeeper_goals_and_assists_count_towards_overview_and_rankings(): void
+    {
+        $goalkeeper = Player::factory()->goleiro()->create();
+        $pelada = $this->pelada('06-11');
+
+        $this->matchPlayer($goalkeeper, $pelada, ['goals' => 2, 'assists' => 1, 'goals_conceded' => 3, 'result' => 'win']);
+
+        $overview = $this->getJson('/api/statistics/players/overview?year='.now()->year);
+        $stats = collect($overview->json('players.data'))->firstWhere('player.id', $goalkeeper->id);
+        $this->assertSame(2, $stats['statistics']['total_goals']);
+        $this->assertSame(1, $stats['statistics']['total_assists']);
+        $this->assertSame(3, $stats['statistics']['total_goals_conceded']);
+
+        $goalsRanking = $this->getJson('/api/statistics/rankings/goals?year='.now()->year.'&minimum_matches=1');
+        $this->assertTrue(collect($goalsRanking->json('data'))->pluck('player.id')->contains($goalkeeper->id));
+    }
 }

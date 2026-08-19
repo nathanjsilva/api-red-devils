@@ -93,11 +93,17 @@ class StatisticsService
         ];
     }
 
-    public function playersOverview(int $perPage): LengthAwarePaginator
+    public function peladaCountForScope(array $filters): int
     {
-        $minimumMatches = $this->minimumMatchesForRanking();
+        return tap(Pelada::query(), fn ($q) => $this->applyDateFilters($q, $filters))->count();
+    }
 
-        $groupedStatistics = $this->rankingBaseQuery('
+    public function playersOverview(int $perPage, array $filters = []): LengthAwarePaginator
+    {
+        $filters = $filters + ['year' => $this->currentYear()];
+        $minimumMatches = $this->minimumMatchesForScope($filters);
+
+        $groupedStatistics = MatchPlayer::selectRaw('
                 player_id,
                 COUNT(*) as total_matches,
                 SUM(goals) as total_goals,
@@ -108,6 +114,7 @@ class StatisticsService
                 ROUND(AVG(goals), 2) as avg_goals_per_match,
                 ROUND(AVG(assists), 2) as avg_assists_per_match
             ')
+            ->whereHas('pelada', fn ($q) => $this->applyDateFilters($q, $filters))
             ->groupBy('player_id')
             ->get()
             ->keyBy('player_id');

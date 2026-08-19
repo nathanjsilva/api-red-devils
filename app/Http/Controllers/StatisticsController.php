@@ -60,11 +60,14 @@ class StatisticsController extends Controller
 
     public function playersOverview(Request $request)
     {
+        $filters = $this->filtersFromRequest($request);
+        $filters['year'] = $filters['year'] ?? $this->statistics->currentYear();
+
         return response()->json([
             'reference_year' => $this->statistics->currentYear(),
-            'total_peladas_in_year' => $this->statistics->totalPeladasInCurrentYear(),
-            'minimum_matches_for_ranking' => $this->statistics->minimumMatchesForRanking(),
-            'players' => $this->statistics->playersOverview($this->perPage($request)),
+            'total_peladas_in_year' => $this->statistics->peladaCountForScope($filters),
+            'minimum_matches_for_ranking' => $this->statistics->minimumMatchesForScope($filters),
+            'players' => $this->statistics->playersOverview($this->perPage($request), $filters),
         ]);
     }
 
