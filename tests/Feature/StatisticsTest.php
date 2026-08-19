@@ -432,6 +432,37 @@ class StatisticsTest extends TestCase
         $this->assertTrue(collect($duo['players'])->pluck('id')->contains($playerB->id));
     }
 
+    public function test_player_best_duo_requires_the_scope_minimum_matches_together(): void
+    {
+        $playerA = Player::factory()->linha()->create();
+        $playerB = Player::factory()->linha()->create();
+
+        // 10 peladas de quinta => minimo no escopo = ceil(10*0.2) = 2.
+        $quintaDates = $this->weekdayDates(Carbon::THURSDAY, 10);
+        foreach ($quintaDates as $date) {
+            Pelada::factory()->create(['date' => $date, 'division' => 'quinta']);
+        }
+
+        // A e B jogam juntos (mesmo time, vitoria) em so 1 dessas peladas.
+        $peladaJunta = Pelada::where('date', $quintaDates[0])->first();
+        $team = Team::factory()->create(['pelada_id' => $peladaJunta->id]);
+        TeamPlayer::create(['team_id' => $team->id, 'player_id' => $playerA->id]);
+        TeamPlayer::create(['team_id' => $team->id, 'player_id' => $playerB->id]);
+        $this->matchPlayer($playerA, $peladaJunta, ['result' => 'win']);
+        $this->matchPlayer($playerB, $peladaJunta, ['result' => 'win']);
+
+        // A joga mais 5 peladas sem B, so para ficar acima do minimo individual dele.
+        foreach (array_slice($quintaDates, 1, 5) as $date) {
+            $this->matchPlayer($playerA, Pelada::where('date', $date)->first(), ['result' => 'loss']);
+        }
+
+        $response = $this->getJson('/api/statistics/players/'.$playerA->id.'?year='.now()->year);
+        $response->assertOk();
+
+        // matches_together (1) fica abaixo do minimo do escopo (2): a dupla nao deve aparecer.
+        $this->assertNull($response->json('data.best_duo'));
+    }
+
     public function test_goalkeepers_overview_returns_only_goalkeepers(): void
     {
         $goalkeeper = Player::factory()->goleiro()->create();

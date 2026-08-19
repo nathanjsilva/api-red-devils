@@ -981,6 +981,7 @@ class StatisticsService
             self::CACHE_TTL_SECONDS,
             function () use ($player, $filters) {
                 $matches = $this->orderedMatchesForPlayer($player->id, $filters);
+                $minimum = $this->minimumMatchesForScope($filters);
 
                 $totalMatches = $matches->count();
                 $totalGoals = (int) $matches->sum('goals');
@@ -1028,7 +1029,7 @@ class StatisticsService
                     'best_participation_streak' => $this->longestStreak($matches, fn ($m) => ($m->goals + $m->assists) > 0),
                     'best_unbeaten_streak' => $this->longestStreak($matches, fn ($m) => $m->result !== 'loss'),
                     'attendance_rate' => $totalPeladasSinceStart > 0 ? round($totalMatches / $totalPeladasSinceStart * 100, 2) : 0.0,
-                    'best_duo' => $this->bestDuoForPlayer($player->id, $filters, 0),
+                    'best_duo' => $this->bestDuoForPlayer($player->id, $filters, $minimum),
                     'recent_form' => [
                         'matches' => $recentFive->map(fn ($m) => [
                             'pelada_id' => $m->pelada_id,
