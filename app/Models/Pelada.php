@@ -35,4 +35,9 @@ class Pelada extends Model
     {
         return $this->hasMany(Team::class);
     }
+
+    public function goalPositions()
+    {
+        return $this->hasMany(GoalPosition::class);
+    }
 }

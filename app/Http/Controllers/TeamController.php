@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GoalPosition;
 use App\Models\MatchPlayer;
 use App\Models\Pelada;
 use App\Models\Player;
@@ -102,7 +103,32 @@ class TeamController extends Controller
                 'location' => $pelada->location,
             ],
             'teams' => $teams,
+            'goal_positions' => $this->goalPositionsFor($peladaId),
         ]);
+    }
+
+    /**
+     * Posições de gol da pelada (usadas apenas quando `qtd_goleiros < qtd_times`),
+     * cada uma com o goleiro que a defende — independente do time de linha que
+     * estiver ocupando a posição durante o revezamento.
+     */
+    private function goalPositionsFor($peladaId)
+    {
+        return GoalPosition::where('pelada_id', $peladaId)
+            ->with('goleiro')
+            ->orderBy('numero')
+            ->get()
+            ->map(function (GoalPosition $goalPosition) {
+                return [
+                    'numero' => $goalPosition->numero,
+                    'goleiro' => $goalPosition->goleiro ? [
+                        'id' => $goalPosition->goleiro->id,
+                        'name' => $goalPosition->goleiro->name,
+                        'nickname' => $goalPosition->goleiro->nickname,
+                        'position' => $goalPosition->goleiro->position,
+                    ] : null,
+                ];
+            })->values();
     }
 
     public function getPeladaPlayersWithStatistics($peladaId)
@@ -185,6 +211,7 @@ class TeamController extends Controller
                     'qtd_goleiros' => $pelada->qtd_goleiros,
                 ],
                 'teams' => [],
+                'goal_positions' => [],
                 'players' => $playersWithStats,
             ]);
         }
@@ -207,6 +234,24 @@ class TeamController extends Controller
             ];
         });
 
+        $goalPositionsWithStats = GoalPosition::where('pelada_id', $peladaId)
+            ->with('goleiro')
+            ->orderBy('numero')
+            ->get()
+            ->map(function (GoalPosition $goalPosition) use ($matchPlayers, $mapStatistics) {
+                $player = $goalPosition->goleiro;
+                $matchPlayer = $player ? $matchPlayers->get($player->id) : null;
+
+                return [
+                    'numero' => $goalPosition->numero,
+                    'id' => $player?->id,
+                    'name' => $player?->name,
+                    'nickname' => $player?->nickname,
+                    'position' => $player?->position,
+                    'statistics' => $matchPlayer ? $mapStatistics($matchPlayer) : null,
+                ];
+            })->values();
+
         return response()->json([
             'pelada' => [
                 'id' => $pelada->id,
@@ -217,6 +262,7 @@ class TeamController extends Controller
                 'qtd_goleiros' => $pelada->qtd_goleiros,
             ],
             'teams' => $teamsWithPlayers,
+            'goal_positions' => $goalPositionsWithStats,
         ]);
     }
 }

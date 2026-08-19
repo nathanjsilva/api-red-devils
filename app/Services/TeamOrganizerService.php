@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Exceptions\InsufficientFieldPlayersException;
 use App\Exceptions\InsufficientGoalkeepersException;
+use App\Models\GoalPosition;
 use App\Models\Pelada;
 use App\Models\Player;
 use App\Models\Team;
@@ -12,16 +14,20 @@ use Illuminate\Support\Facades\DB;
 class TeamOrganizerService
 {
     /**
-     * Organiza os times a partir de uma distribuição explícita de jogadores por time.
+     * Organiza os times a partir de uma distribuição explícita de jogadores de linha
+     * por time e, opcionalmente, dos goleiros.
      *
      * @param  array<int, array{team_number: int, player_ids: array<int, int>}>  $teamAssignments
+     * @param  array<int, array{position: int, player_id: int}>  $goalkeeperAssignments
      */
-    public function organizeManual(Pelada $pelada, array $teamAssignments): Collection
+    public function organizeManual(Pelada $pelada, array $teamAssignments, array $goalkeeperAssignments = []): Collection
     {
-        return DB::transaction(function () use ($pelada, $teamAssignments) {
+        return DB::transaction(function () use ($pelada, $teamAssignments, $goalkeeperAssignments) {
             $this->clearExistingTeams($pelada);
 
-            return collect($teamAssignments)->map(function (array $assignment) use ($pelada) {
+            $teamsByNumber = collect();
+
+            foreach ($teamAssignments as $assignment) {
                 $team = Team::create([
                     'pelada_id' => $pelada->id,
                     'name' => "Time {$assignment['team_number']}",
@@ -29,18 +35,25 @@ class TeamOrganizerService
 
                 $team->players()->attach($assignment['player_ids']);
 
-                return $team->load('players');
-            });
+                $teamsByNumber->put($assignment['team_number'], $team);
+            }
+
+            $this->assignGoalkeepersManually($pelada, $teamsByNumber, $goalkeeperAssignments);
+
+            return $teamsByNumber->values()->map(fn (Team $team) => $team->load('players'));
         });
     }
 
     /**
-     * Organiza os times automaticamente, distribuindo goleiros e jogadores de linha
-     * de forma equilibrada entre os times conforme a configuração da pelada.
+     * Organiza os times automaticamente, distribuindo jogadores de linha entre os
+     * times e goleiros conforme a configuração da pelada — como goleiro fixo por
+     * time (quando `qtd_goleiros >= qtd_times`) ou como posição de gol independente
+     * do time de linha (quando `qtd_goleiros < qtd_times`).
      *
      * @param  array<int, int>  $playerIds
      *
      * @throws InsufficientGoalkeepersException
+     * @throws InsufficientFieldPlayersException
      */
     public function organizeAutomatic(Pelada $pelada, array $playerIds): Collection
     {
@@ -50,6 +63,10 @@ class TeamOrganizerService
 
         if ($goalkeepers->count() < $pelada->qtd_goleiros) {
             throw new InsufficientGoalkeepersException;
+        }
+
+        if ($fieldPlayers->count() < $pelada->qtd_times * $pelada->qtd_jogadores_por_time) {
+            throw new InsufficientFieldPlayersException;
         }
 
         return DB::transaction(function () use ($pelada, $goalkeepers, $fieldPlayers) {
@@ -63,17 +80,7 @@ class TeamOrganizerService
                 ]));
             }
 
-            // Distribui os goleiros proporcionalmente à quantidade configurada na
-            // pelada (qtd_goleiros / qtd_times), em vez de um número fixo por time.
-            $goalkeepersPerTeam = (int) ceil($pelada->qtd_goleiros / $pelada->qtd_times);
-            $goalkeeperIndex = 0;
-            foreach ($teams as $team) {
-                $needed = min($goalkeepersPerTeam, $goalkeepers->count() - $goalkeeperIndex);
-                for ($g = 0; $g < $needed && $goalkeeperIndex < $goalkeepers->count(); $g++) {
-                    $team->players()->attach($goalkeepers[$goalkeeperIndex]->id);
-                    $goalkeeperIndex++;
-                }
-            }
+            $this->distributeGoalkeepersAutomatically($pelada, $goalkeepers, $teams);
 
             $playersPerTeam = (int) floor($fieldPlayers->count() / $pelada->qtd_times);
             $fieldPlayerIndex = 0;
@@ -88,6 +95,70 @@ class TeamOrganizerService
         });
     }
 
+    /**
+     * Distribui goleiros na organização automática.
+     *
+     * - `qtd_goleiros >= qtd_times`: um goleiro fixo por time, anexado em `team_players`
+     *   (amarração permanente time↔goleiro; excedente vira reserva, não alocada).
+     * - `qtd_goleiros < qtd_times`: cada goleiro vira uma `GoalPosition` independente
+     *   do time — os times de linha se revezam nessas posições durante a pelada.
+     */
+    private function distributeGoalkeepersAutomatically(Pelada $pelada, Collection $goalkeepers, Collection $teams): void
+    {
+        $goalkeepers = $goalkeepers->take($pelada->qtd_goleiros)->values();
+
+        if ($pelada->qtd_goleiros >= $pelada->qtd_times) {
+            foreach ($teams as $index => $team) {
+                if (isset($goalkeepers[$index])) {
+                    $team->players()->attach($goalkeepers[$index]->id);
+                }
+            }
+
+            return;
+        }
+
+        for ($numero = 1; $numero <= $pelada->qtd_goleiros; $numero++) {
+            GoalPosition::create([
+                'pelada_id' => $pelada->id,
+                'numero' => $numero,
+                'goleiro_id' => $goalkeepers[$numero - 1]->id,
+            ]);
+        }
+    }
+
+    /**
+     * Atribui goleiros na organização manual, conforme o `position` informado pelo
+     * cliente para cada entrada de `goalkeeperAssignments`:
+     * - `qtd_goleiros >= qtd_times`: `position` é o `team_number`, goleiro anexado em
+     *   `team_players` daquele time.
+     * - `qtd_goleiros < qtd_times`: `position` é o número da posição de gol (1..qtd_goleiros).
+     */
+    private function assignGoalkeepersManually(Pelada $pelada, Collection $teamsByNumber, array $goalkeeperAssignments): void
+    {
+        if (empty($goalkeeperAssignments)) {
+            return;
+        }
+
+        if ($pelada->qtd_goleiros >= $pelada->qtd_times) {
+            foreach ($goalkeeperAssignments as $assignment) {
+                $team = $teamsByNumber->get($assignment['position']);
+                if ($team) {
+                    $team->players()->attach($assignment['player_id']);
+                }
+            }
+
+            return;
+        }
+
+        foreach ($goalkeeperAssignments as $assignment) {
+            GoalPosition::create([
+                'pelada_id' => $pelada->id,
+                'numero' => $assignment['position'],
+                'goleiro_id' => $assignment['player_id'],
+            ]);
+        }
+    }
+
     private function clearExistingTeams(Pelada $pelada): void
     {
         $existingTeams = Team::where('pelada_id', $pelada->id)->get();
@@ -96,5 +167,7 @@ class TeamOrganizerService
             $team->players()->detach();
             $team->delete();
         }
+
+        GoalPosition::where('pelada_id', $pelada->id)->delete();
     }
 }

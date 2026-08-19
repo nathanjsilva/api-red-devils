@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\GoalPosition;
 use App\Models\Pelada;
 use App\Models\Player;
 use App\Models\Team;
@@ -14,8 +15,9 @@ class TeamController extends Controller
     public function __construct(private readonly TeamOrganizerService $teamOrganizer) {}
 
     /**
-     * Organização manual: o cliente informa explicitamente quais jogadores
-     * vão em cada time.
+     * Organização manual: o cliente informa explicitamente quais jogadores de
+     * linha vão em cada time e, opcionalmente, os goleiros (por time, quando
+     * `qtd_goleiros >= qtd_times`, ou por posição de gol, quando `qtd_goleiros < qtd_times`).
      */
     public function organizeManual(Request $request, $peladaId)
     {
@@ -30,11 +32,18 @@ class TeamController extends Controller
             'team_assignments.*.team_number' => 'required|integer|min:1|max:'.$pelada->qtd_times,
             'team_assignments.*.player_ids' => 'required|array',
             'team_assignments.*.player_ids.*' => 'exists:players,id',
+            'goalkeeper_assignments' => 'sometimes|array',
+            'goalkeeper_assignments.*.position' => 'required_with:goalkeeper_assignments|integer|min:1',
+            'goalkeeper_assignments.*.player_id' => 'required_with:goalkeeper_assignments|exists:players,id',
         ]);
 
-        $assignedPlayerIds = collect($request->team_assignments)->pluck('player_ids')->flatten()->unique()->values();
-        $existingPlayerIds = Player::whereIn('id', $assignedPlayerIds)->pluck('id');
-        $invalidPlayers = $assignedPlayerIds->diff($existingPlayerIds)->values();
+        $goalkeeperAssignments = $request->input('goalkeeper_assignments', []);
+
+        $assignedPlayerIds = collect($request->team_assignments)->pluck('player_ids')->flatten()
+            ->merge(collect($goalkeeperAssignments)->pluck('player_id'))
+            ->unique()->values();
+        $existingPlayers = Player::whereIn('id', $assignedPlayerIds)->get()->keyBy('id');
+        $invalidPlayers = $assignedPlayerIds->diff($existingPlayers->keys())->values();
 
         if ($invalidPlayers->isNotEmpty()) {
             return $this->errorResponse(
@@ -45,7 +54,24 @@ class TeamController extends Controller
             );
         }
 
-        $teams = $this->teamOrganizer->organizeManual($pelada, $request->team_assignments);
+        $lineSlotGoalkeepers = collect($request->team_assignments)->pluck('player_ids')->flatten()
+            ->filter(fn ($id) => $existingPlayers->get($id)?->position === 'goleiro')->values();
+        $goalkeeperSlotFieldPlayers = collect($goalkeeperAssignments)->pluck('player_id')
+            ->filter(fn ($id) => $existingPlayers->get($id)?->position !== 'goleiro')->values();
+
+        if ($lineSlotGoalkeepers->isNotEmpty() || $goalkeeperSlotFieldPlayers->isNotEmpty()) {
+            return $this->errorResponse(
+                'Goleiros e jogadores de linha não podem ser misturados entre os slots.',
+                400,
+                'Verifique se cada jogador foi escalado na seção correta (linha ou goleiro).',
+                [
+                    'goalkeepers_in_line_slots' => $lineSlotGoalkeepers,
+                    'field_players_in_goalkeeper_slots' => $goalkeeperSlotFieldPlayers,
+                ]
+            );
+        }
+
+        $teams = $this->teamOrganizer->organizeManual($pelada, $request->team_assignments, $goalkeeperAssignments);
 
         return response()->json([
             'message' => 'Times organizados com sucesso.',
@@ -62,6 +88,7 @@ class TeamController extends Controller
                     ]),
                 ];
             }),
+            'goal_positions' => $this->goalPositionsResponse($pelada),
         ]);
     }
 
@@ -77,7 +104,7 @@ class TeamController extends Controller
         }
 
         $request->validate([
-            'player_ids' => 'required|array|min:'.($pelada->qtd_times * $pelada->qtd_jogadores_por_time),
+            'player_ids' => 'required|array|min:'.($pelada->qtd_times * $pelada->qtd_jogadores_por_time + $pelada->qtd_goleiros),
             'player_ids.*' => 'exists:players,id',
         ]);
 
@@ -90,6 +117,28 @@ class TeamController extends Controller
                 'name' => $team->name,
                 'players' => $team->players,
             ])->values(),
+            'goal_positions' => $this->goalPositionsResponse($pelada),
         ]);
+    }
+
+    /**
+     * Posições de gol da pelada (usadas apenas quando `qtd_goleiros < qtd_times`),
+     * cada uma com o goleiro que a defende, independente do time de linha.
+     */
+    private function goalPositionsResponse(Pelada $pelada)
+    {
+        return GoalPosition::where('pelada_id', $pelada->id)
+            ->with('goleiro')
+            ->orderBy('numero')
+            ->get()
+            ->map(fn (GoalPosition $goalPosition) => [
+                'numero' => $goalPosition->numero,
+                'goleiro' => $goalPosition->goleiro ? [
+                    'id' => $goalPosition->goleiro->id,
+                    'name' => $goalPosition->goleiro->name,
+                    'nickname' => $goalPosition->goleiro->nickname,
+                    'position' => $goalPosition->goleiro->position,
+                ] : null,
+            ])->values();
     }
 }
