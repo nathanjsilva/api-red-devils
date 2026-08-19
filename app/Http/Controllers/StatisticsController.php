@@ -101,7 +101,7 @@ class StatisticsController extends Controller
     public function goalParticipationRanking(Request $request)
     {
         return response()->json([
-            'ranking_type' => 'Participação em Gols',
+            'ranking_type' => 'Participações em Gols',
             'reference_year' => $this->statistics->currentYear(),
             'minimum_matches_for_ranking' => $this->statistics->minimumMatchesForRanking(),
             'ranking' => $this->statistics->goalParticipationRanking($this->perPage($request)),
@@ -114,7 +114,7 @@ class StatisticsController extends Controller
         $minimumOverride = $this->minimumMatchesOverride($request);
         $paginator = $this->statistics->goalParticipationsRankingFull($filters, $this->perPage($request), $minimumOverride);
 
-        return $this->rankingEnvelope($paginator, $filters, $this->statistics->minimumMatchesForScope($filters, $minimumOverride), 'Participação em Gols');
+        return $this->rankingEnvelope($paginator, $filters, $this->statistics->minimumMatchesForScope($filters, $minimumOverride), 'Participações em Gols');
     }
 
     public function winRateRanking(Request $request)
