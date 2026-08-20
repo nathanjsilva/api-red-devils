@@ -204,27 +204,31 @@ class StatisticsTest extends TestCase
         $this->assertSame($playerA->id, $data->first()['player']['id']);
     }
 
-    public function test_top_assister_frequency_ranking_breaks_ties_by_player_name(): void
+    public function test_top_assister_frequency_ranking_counts_every_player_tied_at_the_highest_value(): void
     {
         $playerZ = Player::factory()->linha()->create(['name' => 'Zeca']);
         $playerA = Player::factory()->linha()->create(['name' => 'Ademir']);
+        $playerBehind = Player::factory()->linha()->create(['name' => 'Carlos']);
 
         $pelada = $this->pelada('07-01');
 
-        // Empate em assistências: o critério de desempate (mesmo do artilheiro
-        // da pelada) deve escolher o nome em ordem alfabética, então só um dos
-        // dois pode ser contado como "garçom" dessa pelada.
+        // Empate em assistencias no valor mais alto (2): os dois contam como
+        // garcom da pelada — nao existe mais desempate por nome aqui (mesmo
+        // criterio de pickLeadersInMatch). O terceiro jogador fica atras (1
+        // assistencia) e nao entra no ranking de frequencia.
         $this->matchPlayer($playerZ, $pelada, ['assists' => 2, 'result' => 'win']);
         $this->matchPlayer($playerA, $pelada, ['assists' => 2, 'result' => 'win']);
+        $this->matchPlayer($playerBehind, $pelada, ['assists' => 1, 'result' => 'loss']);
 
         $response = $this->getJson('/api/statistics/rankings/top-assister-frequency?year='.now()->year);
 
         $response->assertOk();
         $data = collect($response->json('data'));
 
-        $this->assertCount(1, $data);
-        $this->assertSame($playerA->id, $data->first()['player']['id']);
-        $this->assertSame(1, $data->first()['value']);
+        $this->assertCount(2, $data);
+        $this->assertSame(1, $data->firstWhere('player.id', $playerZ->id)['value']);
+        $this->assertSame(1, $data->firstWhere('player.id', $playerA->id)['value']);
+        $this->assertNull($data->firstWhere('player.id', $playerBehind->id));
     }
 
     public function test_minimum_matches_query_parameter_overrides_the_computed_default(): void

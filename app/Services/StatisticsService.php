@@ -538,33 +538,27 @@ class StatisticsService
     }
 
     /**
-     * Para cada pelada (respeitando os filtros), identifica o jogador líder
-     * numa métrica (`goals`/`assists`) por maior valor, com desempate por nome
-     * do jogador (um único "vencedor" por pelada, mesmo em caso de empate no
-     * valor — diferente de `pickLeadersInMatch`, que retorna todos os
-     * empatados; aqui é uma contagem de frequência, não um selo por pelada),
-     * e conta quantas vezes cada jogador foi o líder. Uma única query
-     * agregada, sem N+1.
+     * Para cada pelada (respeitando os filtros), identifica o(s) jogador(es)
+     * líder(es) numa métrica (`goals`/`assists`) por maior valor — **sem**
+     * desempate por nome: se dois jogadores empatam no maior valor da pelada,
+     * os dois contam como líder daquela pelada (mesmo critério de
+     * `pickLeadersInMatch`, usado em `matchStatistics()`/`pelada_history` —
+     * os dois lugares devem sempre concordar sobre quem foi
+     * artilheiro/garçom de uma pelada específica). Conta quantas vezes cada
+     * jogador foi líder ao longo do período. Subquery correlacionada pra
+     * achar o máximo por pelada, sem N+1.
      */
     private function peladaLeaderFrequency(array $filters, string $metricColumn): \Illuminate\Support\Collection
     {
-        $ranked = DB::table('match_players as mp')
-            ->join('players as pl', 'pl.id', '=', 'mp.player_id')
+        return DB::table('match_players as mp')
             ->join('peladas as p', function ($join) {
                 $join->on('p.id', '=', 'mp.pelada_id')->whereNull('p.deleted_at');
             })
             ->tap(fn ($q) => $this->applyDateFilters($q, $filters, 'p.date'))
             ->where("mp.{$metricColumn}", '>', 0)
-            ->selectRaw("
-                mp.pelada_id,
-                mp.player_id,
-                ROW_NUMBER() OVER (PARTITION BY mp.pelada_id ORDER BY mp.{$metricColumn} DESC, pl.name ASC) as rn
-            ");
-
-        return DB::query()->fromSub($ranked, 'ranked')
-            ->where('rn', 1)
-            ->selectRaw('player_id, COUNT(*) as times_leader')
-            ->groupBy('player_id')
+            ->whereRaw("mp.{$metricColumn} = (SELECT MAX(mp2.{$metricColumn}) FROM match_players mp2 WHERE mp2.pelada_id = mp.pelada_id)")
+            ->selectRaw('mp.player_id, COUNT(*) as times_leader')
+            ->groupBy('mp.player_id')
             ->get()
             ->keyBy('player_id');
     }
