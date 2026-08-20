@@ -107,3 +107,14 @@ Consultas agregadas pesadas (dashboard, os 7 rankings completos, goleiros, evolu
 - Qualquer novo ranking "completo" deve reaproveitar `fullRankingBaseQuery()` + `paginateFullRanking()`.
 - Qualquer nova consulta agregada pesada deve usar `Cache::remember` seguindo o padrão de `cacheKey()`.
 - `peladaStatistics`/`GET /statistics/pelada/{peladaId}` (visão simples, sem filtro de ano/mínimo) continua existindo separado de `matchStatistics`/`GET /statistics/matches/{match}` (visão enriquecida, reaproveita `peladaStatistics` internamente e acrescenta líderes/times) — não confundir os dois.
+
+## `evolution()` inclui `total_goals_conceded` (a partir de 2026-08-20)
+
+Cada ponto da série de `evolution()` (usada tanto isolada quanto embutida em `playerStatistics()->evolution`) agora traz `total_goals_conceded` (soma de `match_players.goals_conceded` no período, `COALESCE` para 0). Existe pra alimentar o gráfico de evolução do goleiro no frontend (série "Gols sofridos", só exibida quando `player.position === 'goleiro'`); pra jogador de linha o valor vem sempre 0 (coluna é sempre `NULL` nesses registros), sem custo extra relevante na query.
+
+## `playerStatistics()` inclui `pelada_history` (a partir de 2026-08-20)
+
+Novo campo `pelada_history`: lista de **todas** as peladas do jogador no período filtrado (não só as últimas 5 como `recent_form`), mais recente primeiro, cada uma com `pelada_id, date, location, division, result, goals, assists, is_top_scorer, is_top_assister, goals_conceded` (`goals_conceded` só preenchido se `player->position === 'goleiro'`, senão `null` — mesmo critério de `goals_conceded` no restante do método).
+
+- `is_top_scorer`/`is_top_assister` são calculados por `dailyLeaderFlagsByPeladaId()` (privado), que roda `pickLeaderInMatch()` (o **mesmo** método usado em `matchStatistics()`, incluindo o desempate por nome) para cada pelada do jogador, em lote (um único `whereIn('pelada_id', ...)`, sem N+1). O selo só aparece pra quem bate exatamente com o líder daquela pelada — mesmo critério que já aparece em `GET /statistics/matches/{match}` (`top_scorer`/`top_assister`), então os dois lugares devem sempre concordar. Se `pickLeaderInMatch()` mudar de critério, os selos acompanham automaticamente.
+- Cobertura de teste: `tests/Feature/PlayerPeladaHistoryTest.php` (separado de `StatisticsTest.php`).

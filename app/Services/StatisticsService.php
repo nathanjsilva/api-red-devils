@@ -974,6 +974,36 @@ class StatisticsService
         return ['eligible' => true, 'position' => $better + 1];
     }
 
+    /**
+     * Para cada pelada em $peladaIds, descobre se o artilheiro/garcom "oficial"
+     * daquela pelada (mesmo criterio de tie-break usado em matchStatistics via
+     * pickLeaderInMatch) e o proprio $playerId — usado para os selos
+     * "artilheiro do dia"/"garcom do dia" no historico por pelada do jogador.
+     *
+     * @return array<int, array{is_top_scorer: bool, is_top_assister: bool}> indexado por pelada_id
+     */
+    private function dailyLeaderFlagsByPeladaId(int $playerId, \Illuminate\Support\Collection $peladaIds): array
+    {
+        if ($peladaIds->isEmpty()) {
+            return [];
+        }
+
+        return MatchPlayer::whereIn('pelada_id', $peladaIds->unique())
+            ->with('player')
+            ->get()
+            ->groupBy('pelada_id')
+            ->map(function (\Illuminate\Support\Collection $matchPlayers) use ($playerId) {
+                $topScorer = $this->pickLeaderInMatch($matchPlayers, fn ($mp) => $mp->goals);
+                $topAssister = $this->pickLeaderInMatch($matchPlayers, fn ($mp) => $mp->assists);
+
+                return [
+                    'is_top_scorer' => $topScorer && $topScorer['player']['id'] === $playerId,
+                    'is_top_assister' => $topAssister && $topAssister['player']['id'] === $playerId,
+                ];
+            })
+            ->all();
+    }
+
     public function playerStatistics(Player $player, array $filters = []): array
     {
         return Cache::remember(
@@ -1043,6 +1073,26 @@ class StatisticsService
                     'evolution' => $this->evolution('match', $filters, 12, $player->id),
                     'rankings' => $rankings,
                     'goals_conceded' => $player->position === 'goleiro' ? (int) $matches->sum('goals_conceded') : null,
+                    'pelada_history' => (function () use ($matches, $player) {
+                        $leaderFlags = $this->dailyLeaderFlagsByPeladaId($player->id, $matches->pluck('pelada_id'));
+
+                        return $matches->reverse()->values()->map(function ($m) use ($player, $leaderFlags) {
+                            $flags = $leaderFlags[$m->pelada_id] ?? ['is_top_scorer' => false, 'is_top_assister' => false];
+
+                            return [
+                                'pelada_id' => $m->pelada_id,
+                                'date' => $m->pelada?->date,
+                                'location' => $m->pelada?->location,
+                                'division' => $m->pelada?->division,
+                                'result' => $m->result,
+                                'goals' => $m->goals,
+                                'assists' => $m->assists,
+                                'is_top_scorer' => $flags['is_top_scorer'],
+                                'is_top_assister' => $flags['is_top_assister'],
+                                'goals_conceded' => $player->position === 'goleiro' ? $m->goals_conceded : null,
+                            ];
+                        })->values()->all();
+                    })(),
                 ];
             }
         );
@@ -1167,6 +1217,7 @@ class StatisticsService
                         SUM(COALESCE(match_players.goals, 0)) as total_goals,
                         SUM(COALESCE(match_players.assists, 0)) as total_assists,
                         SUM(COALESCE(match_players.goals, 0) + COALESCE(match_players.assists, 0)) as total_goal_participations,
+                        SUM(COALESCE(match_players.goals_conceded, 0)) as total_goals_conceded,
                         COUNT(DISTINCT match_players.player_id) as total_players
                     ")
                     ->groupBy('period_key')
@@ -1187,6 +1238,7 @@ class StatisticsService
                         'total_goals' => (int) $row->total_goals,
                         'total_assists' => (int) $row->total_assists,
                         'total_goal_participations' => (int) $row->total_goal_participations,
+                        'total_goals_conceded' => (int) $row->total_goals_conceded,
                         'avg_goals' => $totalPeladas > 0 ? round($row->total_goals / $totalPeladas, 2) : 0.0,
                         'avg_assists' => $totalPeladas > 0 ? round($row->total_assists / $totalPeladas, 2) : 0.0,
                         'total_players' => (int) $row->total_players,
