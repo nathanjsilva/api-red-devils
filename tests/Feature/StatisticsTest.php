@@ -370,13 +370,44 @@ class StatisticsTest extends TestCase
 
         $this->assertSame(3, $data['total_players']);
         $this->assertSame(4, $data['total_goals']);
-        $this->assertSame($playerA1->id, $data['top_scorer']['player']['id']);
-        $this->assertSame($playerA1->id, $data['top_goal_participation']['player']['id']);
+        $this->assertSame([$playerA1->id], array_column($data['top_scorer']['players'], 'id'));
+        $this->assertSame([$playerA1->id], array_column($data['top_goal_participation']['players'], 'id'));
 
         $teamResults = collect($data['team_results'])->keyBy('team_id');
         $this->assertSame(3, $teamResults[$teamA->id]['total_goals']);
         $this->assertSame(1, $teamResults[$teamB->id]['total_goals']);
         $this->assertSame(2, $data['goal_difference']);
+    }
+
+    public function test_match_statistics_top_scorer_and_top_assister_include_every_tied_player(): void
+    {
+        $pelada = $this->pelada('08-01');
+
+        $player1 = Player::factory()->linha()->create();
+        $player2 = Player::factory()->linha()->create();
+        $player3 = Player::factory()->linha()->create();
+
+        // player1 e player2 empatam em gols (2 cada); player3 fica atras (1 gol) -> nao entra no selo.
+        $this->matchPlayer($player1, $pelada, ['goals' => 2, 'assists' => 1, 'result' => 'win']);
+        $this->matchPlayer($player2, $pelada, ['goals' => 2, 'assists' => 1, 'result' => 'win']);
+        $this->matchPlayer($player3, $pelada, ['goals' => 1, 'assists' => 0, 'result' => 'loss']);
+
+        $response = $this->getJson('/api/statistics/matches/'.$pelada->id);
+
+        $response->assertOk();
+        $data = $response->json('data');
+
+        $this->assertSame(2, $data['top_scorer']['value']);
+        $this->assertEqualsCanonicalizing(
+            [$player1->id, $player2->id],
+            array_column($data['top_scorer']['players'], 'id')
+        );
+
+        $this->assertSame(1, $data['top_assister']['value']);
+        $this->assertEqualsCanonicalizing(
+            [$player1->id, $player2->id],
+            array_column($data['top_assister']['players'], 'id')
+        );
     }
 
     public function test_evolution_groups_by_month_and_year(): void

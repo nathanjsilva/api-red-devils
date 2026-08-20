@@ -63,6 +63,29 @@ class PlayerPeladaHistoryTest extends TestCase
         $this->assertSame([$peladaB->id, $peladaA->id], $orderedIds);
     }
 
+    public function test_pelada_history_flags_all_players_tied_at_the_highest_value(): void
+    {
+        $player1 = Player::factory()->linha()->create();
+        $player2 = Player::factory()->linha()->create();
+        $player3 = Player::factory()->linha()->create();
+
+        $pelada = $this->pelada('06-01');
+
+        // player1 e player2 empatam em gols (2 cada) -> ambos artilheiros da pelada.
+        // player3 fica atras (1 gol) -> nao recebe o selo.
+        $this->matchPlayer($player1, $pelada, ['goals' => 2, 'assists' => 0, 'result' => 'win']);
+        $this->matchPlayer($player2, $pelada, ['goals' => 2, 'assists' => 0, 'result' => 'win']);
+        $this->matchPlayer($player3, $pelada, ['goals' => 1, 'assists' => 0, 'result' => 'loss']);
+
+        $response1 = $this->getJson('/api/statistics/players/'.$player1->id);
+        $response2 = $this->getJson('/api/statistics/players/'.$player2->id);
+        $response3 = $this->getJson('/api/statistics/players/'.$player3->id);
+
+        $this->assertTrue(collect($response1->json('data.pelada_history'))->first()['is_top_scorer']);
+        $this->assertTrue(collect($response2->json('data.pelada_history'))->first()['is_top_scorer']);
+        $this->assertFalse(collect($response3->json('data.pelada_history'))->first()['is_top_scorer']);
+    }
+
     public function test_pelada_history_includes_goals_conceded_for_goalkeeper(): void
     {
         $goalkeeper = Player::factory()->goleiro()->create();

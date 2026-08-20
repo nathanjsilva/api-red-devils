@@ -539,9 +539,12 @@ class StatisticsService
 
     /**
      * Para cada pelada (respeitando os filtros), identifica o jogador líder
-     * numa métrica (`goals`/`assists`) usando o mesmo critério de desempate de
-     * `pickLeaderInMatch` (maior valor, depois nome do jogador), e conta quantas
-     * vezes cada jogador foi o líder. Uma única query agregada, sem N+1.
+     * numa métrica (`goals`/`assists`) por maior valor, com desempate por nome
+     * do jogador (um único "vencedor" por pelada, mesmo em caso de empate no
+     * valor — diferente de `pickLeadersInMatch`, que retorna todos os
+     * empatados; aqui é uma contagem de frequência, não um selo por pelada),
+     * e conta quantas vezes cada jogador foi o líder. Uma única query
+     * agregada, sem N+1.
      */
     private function peladaLeaderFrequency(array $filters, string $metricColumn): \Illuminate\Support\Collection
     {
@@ -975,10 +978,11 @@ class StatisticsService
     }
 
     /**
-     * Para cada pelada em $peladaIds, descobre se o artilheiro/garcom "oficial"
-     * daquela pelada (mesmo criterio de tie-break usado em matchStatistics via
-     * pickLeaderInMatch) e o proprio $playerId — usado para os selos
-     * "artilheiro do dia"/"garcom do dia" no historico por pelada do jogador.
+     * Para cada pelada em $peladaIds, descobre se $playerId esta entre os
+     * artilheiros/garcons "oficiais" daquela pelada (mesmo criterio usado em
+     * matchStatistics via pickLeadersInMatch — em caso de empate no numero
+     * mais alto de gols/assistencias, TODOS os empatados contam) — usado para
+     * os selos "artilheiro do dia"/"garcom do dia" no historico por pelada.
      *
      * @return array<int, array{is_top_scorer: bool, is_top_assister: bool}> indexado por pelada_id
      */
@@ -993,12 +997,12 @@ class StatisticsService
             ->get()
             ->groupBy('pelada_id')
             ->map(function (\Illuminate\Support\Collection $matchPlayers) use ($playerId) {
-                $topScorer = $this->pickLeaderInMatch($matchPlayers, fn ($mp) => $mp->goals);
-                $topAssister = $this->pickLeaderInMatch($matchPlayers, fn ($mp) => $mp->assists);
+                $topScorers = $this->pickLeadersInMatch($matchPlayers, fn ($mp) => $mp->goals);
+                $topAssisters = $this->pickLeadersInMatch($matchPlayers, fn ($mp) => $mp->assists);
 
                 return [
-                    'is_top_scorer' => $topScorer && $topScorer['player']['id'] === $playerId,
-                    'is_top_assister' => $topAssister && $topAssister['player']['id'] === $playerId,
+                    'is_top_scorer' => $topScorers && in_array($playerId, array_column($topScorers['players'], 'id'), true),
+                    'is_top_assister' => $topAssisters && in_array($playerId, array_column($topAssisters['players'], 'id'), true),
                 ];
             })
             ->all();
@@ -1132,7 +1136,15 @@ class StatisticsService
         })->values()->all();
     }
 
-    private function pickLeaderInMatch(\Illuminate\Support\Collection $matchPlayers, callable $valueFn): ?array
+    /**
+     * Lider(es) de uma pelada numa metrica (gols, assistencias, participacoes).
+     * Quando ha empate no valor mais alto, **todos** os jogadores empatados
+     * voltam em `players` — nao existe desempate por nome aqui: artilheiro/
+     * garcom da pelada e um selo compartilhado quando os numeros batem.
+     *
+     * @return array{players: array<int, array{id: int, name: string, nickname: string}>, value: int}|null
+     */
+    private function pickLeadersInMatch(\Illuminate\Support\Collection $matchPlayers, callable $valueFn): ?array
     {
         $eligible = $matchPlayers->filter(fn ($mp) => $valueFn($mp) > 0);
 
@@ -1140,13 +1152,20 @@ class StatisticsService
             return null;
         }
 
-        $best = $eligible->sort(function ($a, $b) use ($valueFn) {
-            return $valueFn($b) <=> $valueFn($a) ?: $a->player->name <=> $b->player->name;
-        })->first();
+        $maxValue = $eligible->max($valueFn);
+
+        $leaders = $eligible
+            ->filter(fn ($mp) => $valueFn($mp) === $maxValue)
+            ->sortBy(fn ($mp) => $mp->player->name)
+            ->values();
 
         return [
-            'player' => ['id' => $best->player->id, 'name' => $best->player->name, 'nickname' => $best->player->nickname],
-            'value' => $valueFn($best),
+            'players' => $leaders->map(fn ($mp) => [
+                'id' => $mp->player->id,
+                'name' => $mp->player->name,
+                'nickname' => $mp->player->nickname,
+            ])->all(),
+            'value' => $maxValue,
         ];
     }
 
@@ -1177,9 +1196,9 @@ class StatisticsService
 
             return array_merge($base, [
                 'avg_goals_per_player' => $base['total_players'] > 0 ? round($base['total_goals'] / $base['total_players'], 2) : 0.0,
-                'top_scorer' => $this->pickLeaderInMatch($matchPlayers, fn ($mp) => $mp->goals),
-                'top_assister' => $this->pickLeaderInMatch($matchPlayers, fn ($mp) => $mp->assists),
-                'top_goal_participation' => $this->pickLeaderInMatch($matchPlayers, fn ($mp) => $mp->goals + $mp->assists),
+                'top_scorer' => $this->pickLeadersInMatch($matchPlayers, fn ($mp) => $mp->goals),
+                'top_assister' => $this->pickLeadersInMatch($matchPlayers, fn ($mp) => $mp->assists),
+                'top_goal_participation' => $this->pickLeadersInMatch($matchPlayers, fn ($mp) => $mp->goals + $mp->assists),
                 'team_results' => $teamResults,
                 'goal_difference' => $teamResults->count() >= 2 ? $teamResults->max('total_goals') - $teamResults->min('total_goals') : null,
             ]);
