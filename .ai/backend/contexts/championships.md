@@ -9,14 +9,14 @@ O módulo administra campeonatos independentes das peladas tradicionais: cinco e
 ## Arquivos envolvidos
 
 - `app/Http/Controllers/ChampionshipController.php` — leitura pública e operações administrativas do campeonato.
-- `app/Models/Championship.php` — campeonato e relações com equipes, participantes, partidas, sorteios, desempates, auditoria e premiações.
+- `app/Models/Championship.php` — campeonato e relações com equipes, participantes, partidas, desempates, auditoria e premiações.
 - `app/Models/ChampionshipTeam.php` — equipes, brasões e participantes.
 - `app/Models/ChampionshipPlayer.php` — inscrição do jogador global no campeonato, com tipo e Pedra próprios.
 - `app/Models/ChampionshipMatch.php` — partidas, placares, pênaltis, eventos, participações e odds.
 - `app/Models/ChampionshipMatchEvent.php` — gols, assistências, equipe do evento, minuto e gol contra.
 - `app/Models/ChampionshipMatchParticipation.php` — participantes e MVP.
 - `app/Models/ChampionshipAwardCategory.php`, `ChampionshipAwardResult.php`, `ChampionshipVote.php` — premiações, resultados e votos.
-- `app/Models/ChampionshipGoalkeeperDraw.php`, `ChampionshipTieBreaker.php`, `ChampionshipAuditLog.php` — sorteios, desempates e auditoria.
+- `app/Models/ChampionshipGoalkeeperDraw.php`, `ChampionshipTieBreaker.php`, `ChampionshipAuditLog.php` — histórico legado, desempates e auditoria.
 - `app/Services/ChampionshipFixtureService.php` — dez jogos de turno único em cinco rodadas.
 - `app/Services/ChampionshipValidationService.php` — validação da configuração antes do início.
 - `app/Services/ChampionshipStandingsService.php` — classificação e critérios de desempate.
@@ -24,7 +24,6 @@ O módulo administra campeonatos independentes das peladas tradicionais: cinco e
 - `app/Services/ChampionshipStatisticsService.php` — estatísticas por jogador e fase.
 - `app/Services/ChampionshipOddsService.php` — probabilidades e odds com modelo Poisson.
 - `app/Services/ChampionshipAwardService.php` — categorias, consolidação e publicação de premiações.
-- `app/Services/GoalkeeperDrawService.php` — sorteio persistido e auditável dos goleiros.
 - `database/migrations/2026_10_19_120000_create_championship_module_tables.php`
 - `database/migrations/2026_10_19_121000_create_championship_awards_and_user_player_link.php`
 - `tests/Feature/ChampionshipModuleTest.php`
@@ -58,7 +57,6 @@ Todas ficam no grupo `middleware(['auth:sanctum', 'admin'])->prefix('admin')`.
 | `GET` | `/admin/championship-users` | Lista contas para vínculo com jogador |
 | `PUT` | `/admin/championship-users/{user}/player` | Vincula conta autenticada a jogador global |
 | `POST` | `/admin/championships/{championship}/playoffs` | Gera semifinais e congela classificação |
-| `POST` | `/admin/championships/{championship}/goalkeepers/draw` | Sorteia ou refaz sorteio dos goleiros |
 | `POST/DELETE` | `/admin/championship-teams/{team}/crest` | Envia ou remove brasão |
 | `POST` | `/admin/championships/{championship}/awards/publish` | Consolida e publica premiações |
 | `PUT` | `/admin/championships/{championship}/awards/voting-state` | Encerra todas as votações do campeonato |
@@ -88,14 +86,14 @@ Todas ficam no grupo `middleware(['auth:sanctum', 'admin'])->prefix('admin')`.
 ## Respostas e serialização
 
 - Controllers de leitura retornam JSON direto; o frontend aceita também envelopes `{ data: ... }` por compatibilidade geral.
-- Relacionamentos Eloquent são serializados em `snake_case`, como `home_team`, `away_team`, `goalkeeper_draws` e `championship_player`.
+- Relacionamentos Eloquent são serializados em `snake_case`, como `home_team`, `away_team` e `championship_player`.
 - `GET /championships/{championship}` retorna `championship`, `standings`, `matches` e `champion`.
 - `GET /championships/{championship}/rankings` retorna `scorers`, `assists`, `mvp` e `goalkeepers`.
 - `GET /championships/{championship}/statistics` retorna linhas com jogador, posição, jogos, resultados, gols, assistências, participações, MVP e métricas de goleiro.
 
 ## Auditoria, testes e cuidados
 
-- Início, alterações de equipe, brasões, sorteios e desempates devem continuar auditáveis.
+- Início, alterações de equipe, brasões e desempates devem continuar auditáveis.
 - Não editar `deploy.sh`, `docker-compose.prod.yml`, `nginx/production.conf` ou segredos para alterar este módulo.
 - Não executar migrations que alterem dados sem autorização explícita.
 - O teste base do módulo está em `tests/Feature/ChampionshipModuleTest.php`; alterações em regras de fixture, classificação, odds, inscrição, votação ou eventos devem incluir cobertura correspondente.

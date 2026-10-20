@@ -3,6 +3,7 @@ namespace Tests\Feature;
 use App\Models\Championship;
 use App\Models\ChampionshipMatch;
 use App\Models\Player;
+use App\Models\User;
 use App\Services\ChampionshipFixtureService;
 use App\Services\ChampionshipOddsService;
 use App\Services\ChampionshipStandingsService;
@@ -31,6 +32,26 @@ class ChampionshipModuleTest extends TestCase
         $championship=Championship::create(['name'=>'Teste']); $teams=collect(['A','B','C','D','E'])->map(fn($name)=>$championship->teams()->create(['name'=>$name]));
         foreach($teams->take(2) as $teamIndex=>$team){ for($i=1;$i<=5;$i++){ $player=Player::factory()->create(['position'=>'linha']); $participant=$championship->players()->create(['player_id'=>$player->id,'player_type'=>'field','stone_group'=>$i,'stone_level'=>number_format($i+$teamIndex*0.1,1)]); $team->players()->attach($participant->id); } $keeper=Player::factory()->create(['position'=>'goleiro']); $goalkeeper=$championship->players()->create(['player_id'=>$keeper->id,'player_type'=>'goalkeeper','stone_group'=>1]); $team->players()->attach($goalkeeper->id); }
         $match=ChampionshipMatch::create(['championship_id'=>$championship->id,'home_team_id'=>$teams[0]->id,'away_team_id'=>$teams[1]->id,'phase'=>'group']); $odds=app(ChampionshipOddsService::class)->calculate($match); $this->assertNotNull($odds->id); $this->assertEqualsWithDelta(1,(float)$odds->home_probability+(float)$odds->draw_probability+(float)$odds->away_probability,0.01);
+    }
+    public function test_registering_a_goalkeeper_assigns_it_to_one_team(): void
+    {
+        $championship=Championship::create(['name'=>'Teste']); $teams=collect(['A','B','C','D','E'])->map(fn($name)=>$championship->teams()->create(['name'=>$name]));
+        $player=Player::factory()->goleiro()->create(); $admin=User::factory()->create();
+
+        $response=$this->actingAs($admin,'sanctum')->postJson("/api/admin/championships/{$championship->id}/players",['player_id'=>$player->id,'player_type'=>'goalkeeper','stone_group'=>1,'stone_level'=>null,'team_id'=>$teams[0]->id]);
+
+        $response->assertOk(); $participant=$championship->players()->where('player_id',$player->id)->firstOrFail();
+        $this->assertDatabaseHas('championship_team_players',['championship_team_id'=>$teams[0]->id,'championship_player_id'=>$participant->id]);
+        $this->assertCount(1,$participant->fresh('teams')->teams);
+    }
+    public function test_field_formation_keeps_registered_goalkeepers(): void
+    {
+        $championship=Championship::create(['name'=>'Teste']); $teams=collect(['A','B','C','D','E'])->map(fn($name)=>$championship->teams()->create(['name'=>$name]));
+        $keeper=Player::factory()->goleiro()->create(); $goalkeeper=$championship->players()->create(['player_id'=>$keeper->id,'player_type'=>'goalkeeper','stone_group'=>1]); $teams[0]->players()->attach($goalkeeper->id);
+        $assignments=$teams->map(function($team,$teamIndex) use ($championship) { $ids=[]; for($group=1;$group<=5;$group++){ $player=Player::factory()->linha()->create(); $participant=$championship->players()->create(['player_id'=>$player->id,'player_type'=>'field','stone_group'=>$group,'stone_level'=>number_format($group+($teamIndex/10),1)]); $ids[]=$participant->id; } return ['team_id'=>$team->id,'championship_player_ids'=>$ids]; })->values()->all();
+        $admin=User::factory()->create(); $response=$this->actingAs($admin,'sanctum')->postJson("/api/admin/championships/{$championship->id}/assignments",['assignments'=>$assignments]);
+
+        $response->assertOk(); $this->assertCount(1,$goalkeeper->fresh('teams')->teams); $this->assertSame($teams[0]->id,$goalkeeper->fresh('teams')->teams->first()->id);
     }
     public function test_award_voting_starts_open_and_ends_for_all_categories(): void
     {

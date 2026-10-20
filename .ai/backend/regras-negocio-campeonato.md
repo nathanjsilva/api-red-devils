@@ -42,7 +42,7 @@ Os jogadores de linha são distribuídos em cinco grupos:
 
 Cada classificação decimal pode ser usada somente uma vez dentro do campeonato. A Pedra 1 representa a maior força técnica e a Pedra 5 a menor.
 
-Os goleiros também possuem uma Pedra de 1 a 5, usada no cadastro do campeonato e no sorteio.
+Os goleiros também possuem uma Pedra de 1 a 5, usada no cadastro do campeonato.
 
 ## 4. Formação das equipes
 
@@ -65,13 +65,12 @@ Somente os times possuem imagens no módulo. O administrador pode enviar, substi
 
 São aceitos arquivos JPG, JPEG, PNG ou WEBP, com limite de 2 MB. Quando não há brasão, a interface mostra as iniciais do nome da equipe.
 
-## 6. Sorteio dos goleiros
+## 6. Cadastro dos goleiros
 
-O sorteio exige cinco equipes e cinco goleiros inscritos. Cada goleiro é atribuído a uma equipe e o resultado fica salvo no banco.
+Cada goleiro é atribuído a uma única equipe no próprio cadastro do campeonato. A equipe precisa pertencer ao campeonato e ainda não pode possuir outro goleiro.
 
-O sorteio só pode ocorrer antes do início do campeonato. Se já houver um sorteio, um novo sorteio exige confirmação administrativa. O resultado anterior permanece no histórico, com número do sorteio, equipes, goleiros, data e responsável.
+O cadastro só pode ocorrer antes do início do campeonato. A mesma inscrição de goleiro não pode ser vinculada a duas equipes, e cada equipe deve terminar com exatamente um goleiro.
 
-A regra especial relacionada aos jogadores de linha Pedra 1.1 e 1.5 permanece configurável, porque a correspondência exata com os goleiros não foi definida no requisito original.
 
 ## 7. Fase classificatória
 

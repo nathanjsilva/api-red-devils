@@ -17,7 +17,6 @@ use App\Services\ChampionshipOddsService;
 use App\Services\ChampionshipStandingsService;
 use App\Services\ChampionshipPlayoffService;
 use App\Services\ChampionshipAwardService;
-use App\Services\GoalkeeperDrawService;
 use App\Services\ChampionshipAuditService;
 use App\Services\ChampionshipValidationService;
 use App\Services\ChampionshipStatisticsService;
@@ -34,7 +33,7 @@ class ChampionshipController extends Controller
         $table = $standings->calculate($championship);
         $champion = $final?->qualified_team_id ? $championship->teams()->with('players.player')->find($final->qualified_team_id) : null;
         if ($champion) { $champion->campaign = collect($table)->firstWhere('team_id', $champion->id); $champion->decisive_matches = $matches->whereIn('phase', ['semi_final', 'challenger_final', 'final'])->where('status', 'finished')->values(); }
-        return response()->json(['championship'=>$championship->load(['teams.players.player','players.player','goalkeeperDraws']), 'standings'=>$table, 'matches'=>$matches, 'champion'=>$champion]);
+        return response()->json(['championship'=>$championship->load(['teams.players.player','players.player']), 'standings'=>$table, 'matches'=>$matches, 'champion'=>$champion]);
     }
     public function store(Request $request)
     {
@@ -49,13 +48,26 @@ class ChampionshipController extends Controller
     public function registerPlayer(Request $request, Championship $championship)
     {
         abort_if($championship->status !== 'draft', 422, 'As inscrições só podem ser alteradas antes do início.');
-        $data = $request->validate(['player_id'=>'required|exists:players,id','player_type'=>'required|in:field,goalkeeper','stone_group'=>'required|integer|min:1|max:5','stone_level'=>'required_if:player_type,field|nullable|numeric|between:1.1,5.5','sport_position'=>'nullable|string|max:30']);
+        $data = $request->validate(['player_id'=>'required|exists:players,id','player_type'=>'required|in:field,goalkeeper','stone_group'=>'required|integer|min:1|max:5','stone_level'=>'required_if:player_type,field|nullable|numeric|between:1.1,5.5','sport_position'=>'nullable|string|max:30','team_id'=>'nullable|integer|exists:championship_teams,id']);
         $globalPlayer=Player::findOrFail($data['player_id']); abort_if(($data['player_type']==='goalkeeper') !== ($globalPlayer->position==='goleiro'),422,'A posição do jogador não corresponde ao tipo da inscrição.');
         abort_if($championship->players()->where('player_id', $data['player_id'])->exists(), 422, 'Jogador já inscrito.');
         abort_if($data['player_type'] === 'field' && $championship->players()->where('player_type','field')->count() >= 25, 422, 'Limite de jogadores de linha atingido.');
         abort_if($data['player_type'] === 'goalkeeper' && $championship->players()->where('player_type','goalkeeper')->count() >= 5, 422, 'Limite de goleiros atingido.');
         if ($data['player_type'] === 'field') abort_if($championship->players()->where('stone_level',$data['stone_level'])->exists(), 422, 'Esta classificação já foi usada.');
-        return $championship->players()->create($data)->load('player');
+        $team = null;
+        if ($data['player_type'] === 'goalkeeper') {
+            abort_if(empty($data['team_id']), 422, 'Selecione uma equipe para o goleiro.');
+            $team = $championship->teams()->whereKey($data['team_id'])->first();
+            abort_if(!$team, 422, 'A equipe selecionada não pertence ao campeonato.');
+            abort_if($team->players()->where('player_type', 'goalkeeper')->exists(), 422, 'A equipe já possui um goleiro.');
+        }
+
+        return DB::transaction(function () use ($championship, $data, $team) {
+            $participant = $championship->players()->create(collect($data)->except('team_id')->all());
+            if ($team) $team->players()->attach($participant->id);
+
+            return $participant->load('player');
+        });
     }
     public function assignPlayers(Request $request, Championship $championship)
     {
@@ -64,7 +76,8 @@ class ChampionshipController extends Controller
         DB::transaction(function () use ($championship, $data) {
             $teamIds = collect($data['assignments'])->pluck('team_id');
             abort_if($teamIds->unique()->count() !== 5 || ChampionshipTeam::where('championship_id',$championship->id)->whereIn('id',$teamIds)->count() !== 5, 422, 'A formação deve usar exatamente os cinco times do campeonato.');
-            $championship->teams()->each(fn ($team) => $team->players()->detach());
+            $fieldPlayerIds = $championship->players()->where('player_type', 'field')->pluck('id');
+            $championship->teams()->each(fn ($team) => $team->players()->detach($fieldPlayerIds));
             $seen = collect();
             foreach ($data['assignments'] as $assignment) {
                 $ids = collect($assignment['championship_player_ids']);
@@ -95,7 +108,6 @@ class ChampionshipController extends Controller
         $team->update(['crest_path'=>$request->file('crest')->store('championship-crests','public')]); $audit->record($team->championship_id,'team.crest.updated',$team); return $team->fresh();
     }
     public function removeCrest(ChampionshipTeam $team, ChampionshipAuditService $audit) { if ($team->crest_path) Storage::disk('public')->delete($team->crest_path); $team->update(['crest_path'=>null]); $audit->record($team->championship_id,'team.crest.removed',$team); return $team->fresh(); }
-    public function drawGoalkeepers(Request $request, Championship $championship, GoalkeeperDrawService $service, ChampionshipAuditService $audit) { $data=$request->validate(['confirmed'=>'boolean']); $service->draw($championship,$request->user()->id,(bool)($data['confirmed']??false)); $audit->record($championship->id,'goalkeepers.draw'); return $championship->goalkeeperDraws()->with(['team','championshipPlayer.player'])->latest('draw_number')->get(); }
     public function updateMatch(Request $request, ChampionshipMatch $match)
     {
         $data = $request->validate(['home_score'=>'required|integer|min:0','away_score'=>'required|integer|min:0','home_penalty_score'=>'nullable|integer|min:0','away_penalty_score'=>'nullable|integer|min:0','status'=>'required|in:finished,cancelled']);
