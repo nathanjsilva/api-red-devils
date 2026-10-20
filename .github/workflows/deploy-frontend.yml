@@ -26,7 +26,8 @@ jobs:
           port: ${{ secrets.VPS_PORT || '22' }}
           script_stop: true
           script: |
-            set -Eeuo pipefail
+            set -eu
+            echo "Iniciando deploy do frontend..."
 
             API_DIR="${{ secrets.VPS_APP_DIR }}"
             REQUESTED_FRONTEND_DIR="${{ inputs.frontend_dir }}"
