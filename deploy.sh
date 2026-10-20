@@ -45,6 +45,31 @@ mysql_health() {
 
 echo "Iniciando deploy da API Red Devils..."
 
+DEPLOY_UID="$(id -u)"
+DEPLOY_GID="$(id -g)"
+
+run_privileged() {
+  if [ "$DEPLOY_UID" -eq 0 ]; then
+    "$@"
+  elif sudo -n true >/dev/null 2>&1; then
+    sudo -n "$@"
+  else
+    echo "Erro: sudo sem senha nao esta disponivel para ajustar permissoes do repositorio."
+    return 1
+  fi
+}
+
+restore_runtime_permissions() {
+  local gitignore_file
+
+  while IFS= read -r -d '' gitignore_file; do
+    run_privileged chown "$DEPLOY_UID:$DEPLOY_GID" "$gitignore_file" "$(dirname "$gitignore_file")"
+  done < <(find storage bootstrap/cache -type f -name .gitignore -print0)
+}
+
+restore_runtime_permissions
+trap 'restore_runtime_permissions || true' EXIT
+
 if [ "$SKIP_GIT_SYNC" -eq 0 ]; then
   echo "Sincronizando codigo com origin/$APP_BRANCH..."
   git fetch origin "$APP_BRANCH"

@@ -29,5 +29,23 @@ jobs:
             fi
 
             cd "$APP_DIR"
+
+            restore_runtime_permissions() {
+              local gitignore_file
+
+              while IFS= read -r -d '' gitignore_file; do
+                if [ "$(id -u)" -eq 0 ]; then
+                  chown "$(id -u):$(id -g)" "$gitignore_file" "$(dirname "$gitignore_file")"
+                elif sudo -n true >/dev/null 2>&1; then
+                  sudo -n chown "$(id -u):$(id -g)" "$gitignore_file" "$(dirname "$gitignore_file")"
+                else
+                  echo "Nao foi possivel obter permissao para preparar storage e bootstrap/cache."
+                  return 1
+                fi
+              done < <(find "$APP_DIR/storage" "$APP_DIR/bootstrap/cache" -type f -name .gitignore -print0)
+            }
+
+            restore_runtime_permissions
+            trap 'restore_runtime_permissions || true' EXIT
             chmod +x deploy.sh
             APP_BRANCH=main ./deploy.sh
