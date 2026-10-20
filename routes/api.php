@@ -9,12 +9,20 @@ use App\Http\Controllers\PeladaController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\ChampionshipController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/players', [PlayerController::class, 'index']);
 Route::get('/players/{id}', [PlayerController::class, 'show']);
+
+Route::get('/championships', [ChampionshipController::class, 'index']);
+Route::get('/championships/{championship}', [ChampionshipController::class, 'show']);
+Route::get('/championships/{championship}/awards', [ChampionshipController::class, 'awards']);
+Route::get('/championships/{championship}/statistics', [ChampionshipController::class, 'statistics']);
+Route::get('/championships/{championship}/rankings', [ChampionshipController::class, 'rankings']);
+Route::middleware('auth:sanctum')->post('/championship-awards/{category}/votes', [ChampionshipController::class, 'vote']);
 
 Route::get('/peladas', [PeladaController::class, 'index']);
 Route::get('/peladas/date/{date}', [PeladaController::class, 'byDate']);
@@ -72,4 +80,26 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::put('match-players/{id}', [AdminMatchPlayerController::class, 'update']);
     Route::delete('match-players/{id}', [AdminMatchPlayerController::class, 'destroy']);
     Route::put('peladas/{peladaId}/players/{playerId}/statistics', [AdminMatchPlayerController::class, 'upsertByPlayerAndPelada']);
+
+    Route::post('championships', [ChampionshipController::class, 'store']);
+    Route::post('championships/{championship}/players', [ChampionshipController::class, 'registerPlayer']);
+    Route::post('championships/{championship}/assignments', [ChampionshipController::class, 'assignPlayers']);
+    Route::post('championships/{championship}/fixtures', [ChampionshipController::class, 'generateFixtures']);
+    Route::post('championships/{championship}/start', [ChampionshipController::class, 'start']);
+    Route::put('championship-teams/{team}', [ChampionshipController::class, 'updateTeam']);
+    Route::post('championships/{championship}/standings/tie-breaker', [ChampionshipController::class, 'resolveTie']);
+    Route::get('championship-users', [ChampionshipController::class, 'users']);
+    Route::put('championship-users/{user}/player', [ChampionshipController::class, 'linkUserPlayer']);
+    Route::post('championships/{championship}/playoffs', [ChampionshipController::class, 'generatePlayoffs']);
+    Route::post('championships/{championship}/goalkeepers/draw', [ChampionshipController::class, 'drawGoalkeepers']);
+    Route::post('championship-teams/{team}/crest', [ChampionshipController::class, 'uploadCrest']);
+    Route::delete('championship-teams/{team}/crest', [ChampionshipController::class, 'removeCrest']);
+    Route::post('championships/{championship}/awards/publish', [ChampionshipController::class, 'publishAwards']);
+    Route::put('championship-awards/{category}/voting-state', [ChampionshipController::class, 'setVotingState']);
+    Route::put('championship-matches/{match}', [ChampionshipController::class, 'updateMatch']);
+    Route::post('championship-matches/{match}/events', [ChampionshipController::class, 'addEvent']);
+    Route::put('championship-events/{event}', [ChampionshipController::class, 'updateEvent']);
+    Route::delete('championship-events/{event}', [ChampionshipController::class, 'deleteEvent']);
+    Route::post('championship-matches/{match}/participation', [ChampionshipController::class, 'setParticipation']);
+    Route::post('championship-matches/{match}/odds', [ChampionshipController::class, 'calculateOdds']);
 });

@@ -16,6 +16,7 @@ class User extends Authenticatable
         'username',
         'password',
         'profile',
+        'player_id',
     ];
 
     protected $hidden = [
@@ -34,4 +35,6 @@ class User extends Authenticatable
     {
         return $this->profile === 'admin';
     }
+
+    public function player() { return $this->belongsTo(Player::class); }
 }

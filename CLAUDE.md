@@ -50,6 +50,7 @@ Este projeto é **apenas backend** (API Laravel). Não existe pasta `frontend/` 
 │       ├── teams.md
 │       ├── match-players.md
 │       ├── statistics.md
+│       ├── championships.md
 │       └── admin.md
 ├── ai-rules.md             ← regras gerais e ordem de prioridade
 ├── project-context.md      ← contexto geral, stack, modelos, endpoints, deploy
