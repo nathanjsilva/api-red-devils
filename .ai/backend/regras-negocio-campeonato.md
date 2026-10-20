@@ -229,13 +229,13 @@ A votação exige que:
 - A conta esteja vinculada a um jogador.
 - O jogador vinculado esteja inscrito no campeonato.
 - A categoria seja do tipo votação.
-- A votação esteja aberta.
+- A votação ainda não tenha sido encerrada globalmente pelo administrador.
 - A categoria ainda não esteja publicada.
 - O candidato pertença ao campeonato.
 - O eleitor não vote em si mesmo.
 - O usuário vote no máximo uma vez por categoria.
 
-Os votos são persistidos individualmente. Depois do encerramento, o administrador pode publicar os resultados, que mostram vencedor, quantidade de votos e percentual de votos válidos.
+Os votos são persistidos individualmente. As categorias permanecem disponíveis até que um administrador encerre a votação globalmente após o encerramento esportivo. Depois disso, o administrador pode publicar os resultados, que mostram vencedor, quantidade de votos e percentual de votos válidos.
 
 ## 15. Auditoria e integridade
 

@@ -6,6 +6,7 @@ use App\Models\Player;
 use App\Services\ChampionshipFixtureService;
 use App\Services\ChampionshipOddsService;
 use App\Services\ChampionshipStandingsService;
+use App\Services\ChampionshipAwardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 class ChampionshipModuleTest extends TestCase
@@ -30,5 +31,12 @@ class ChampionshipModuleTest extends TestCase
         $championship=Championship::create(['name'=>'Teste']); $teams=collect(['A','B','C','D','E'])->map(fn($name)=>$championship->teams()->create(['name'=>$name]));
         foreach($teams->take(2) as $teamIndex=>$team){ for($i=1;$i<=5;$i++){ $player=Player::factory()->create(['position'=>'linha']); $participant=$championship->players()->create(['player_id'=>$player->id,'player_type'=>'field','stone_group'=>$i,'stone_level'=>number_format($i+$teamIndex*0.1,1)]); $team->players()->attach($participant->id); } $keeper=Player::factory()->create(['position'=>'goleiro']); $goalkeeper=$championship->players()->create(['player_id'=>$keeper->id,'player_type'=>'goalkeeper','stone_group'=>1]); $team->players()->attach($goalkeeper->id); }
         $match=ChampionshipMatch::create(['championship_id'=>$championship->id,'home_team_id'=>$teams[0]->id,'away_team_id'=>$teams[1]->id,'phase'=>'group']); $odds=app(ChampionshipOddsService::class)->calculate($match); $this->assertNotNull($odds->id); $this->assertEqualsWithDelta(1,(float)$odds->home_probability+(float)$odds->draw_probability+(float)$odds->away_probability,0.01);
+    }
+    public function test_award_voting_starts_open_and_ends_for_all_categories(): void
+    {
+        $championship=Championship::create(['name'=>'Teste']); app(ChampionshipAwardService::class)->seed($championship);
+        $this->assertTrue((bool)$championship->awardCategories()->where('type','vote')->firstOrFail()->voting_open);
+        $closed=app(ChampionshipAwardService::class)->endVoting($championship);
+        $this->assertGreaterThan(0,$closed); $this->assertSame(0,$championship->awardCategories()->where('type','vote')->where('voting_open',true)->count());
     }
 }

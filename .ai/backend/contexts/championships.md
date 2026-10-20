@@ -61,7 +61,7 @@ Todas ficam no grupo `middleware(['auth:sanctum', 'admin'])->prefix('admin')`.
 | `POST` | `/admin/championships/{championship}/goalkeepers/draw` | Sorteia ou refaz sorteio dos goleiros |
 | `POST/DELETE` | `/admin/championship-teams/{team}/crest` | Envia ou remove brasão |
 | `POST` | `/admin/championships/{championship}/awards/publish` | Consolida e publica premiações |
-| `PUT` | `/admin/championship-awards/{category}/voting-state` | Abre ou encerra votação |
+| `PUT` | `/admin/championships/{championship}/awards/voting-state` | Encerra todas as votações do campeonato |
 | `PUT` | `/admin/championship-matches/{match}` | Finaliza/cancela partida e registra pênaltis |
 | `POST` | `/admin/championship-matches/{match}/events` | Cria gol, assistência ou gol contra |
 | `PUT/DELETE` | `/admin/championship-events/{event}` | Altera/remove evento e recalcula placar |
@@ -83,7 +83,7 @@ Todas ficam no grupo `middleware(['auth:sanctum', 'admin'])->prefix('admin')`.
 - Estatísticas consideram apenas partidas finalizadas e válidas.
 - Odds são informativas, calculadas por Poisson e persistidas com os parâmetros do cálculo; não há apostas financeiras.
 - Existem quinze premiações. Artilheiro e Garçom são automáticos; as outras categorias usam votação.
-- Voto exige conta autenticada vinculada a jogador inscrito, um voto por categoria e impede auto-voto.
+- Voto fica disponível até o encerramento global pelo administrador, exige conta autenticada vinculada a jogador inscrito, um voto por categoria e impede auto-voto.
 
 ## Respostas e serialização
 

@@ -148,12 +148,19 @@ class ChampionshipController extends Controller
     public function publishAwards(Championship $championship, ChampionshipAwardService $service)
     {
         abort_if($championship->status !== 'finished', 422, 'A votação só pode ser publicada após o encerramento esportivo.');
+        abort_if($championship->awardCategories()->where('type','vote')->where('published',false)->where('voting_open',true)->exists(), 422, 'Encerre a votação antes de publicar os resultados.');
         $stats=collect(app(ChampionshipStatisticsService::class)->calculate($championship));
         foreach ($championship->awardCategories()->where('type','statistic')->get() as $category) { $field=str_contains($category->name,'Garçom')?'assists':'goals'; $winner=$stats->sortByDesc($field)->first(); if($winner) ChampionshipAwardResult::updateOrCreate(['championship_award_category_id'=>$category->id,'winner_id'=>$championship->players()->where('player_id',$winner['player']['id'])->value('id')],['votes'=>0,'percentage'=>100]); $category->update(['published'=>true]); }
         $championship->awardCategories()->where('type','vote')->each(function ($category) use ($service) { $service->consolidate($category); $category->update(['published'=>true]); });
         return $championship->awardCategories()->with('results')->get();
     }
-    public function setVotingState(Request $request, ChampionshipAwardCategory $category) { $data=$request->validate(['voting_open'=>'required|boolean']); abort_if($category->published,422,'Esta categoria já foi publicada.'); $category->update(['voting_open'=>$data['voting_open']]); return $category->fresh(); }
+    public function endVoting(Championship $championship, ChampionshipAwardService $service, ChampionshipAuditService $audit)
+    {
+        abort_if($championship->status !== 'finished', 422, 'A votação só pode ser encerrada após o encerramento esportivo.');
+        $closed = $service->endVoting($championship);
+        $audit->record($championship->id,'awards.voting.ended',null,['categories_closed'=>$closed]);
+        return $championship->awardCategories()->with('results.winner.player')->get();
+    }
     private function advancePlayoff(ChampionshipMatch $match): void
     {
         if ($match->phase === 'group') return;
