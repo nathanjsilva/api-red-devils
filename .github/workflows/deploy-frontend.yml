@@ -38,20 +38,16 @@ jobs:
                 exit 1
               fi
             else
-              SEARCH_ROOTS=("$(dirname "$API_DIR")" "$HOME" "/var/www" "/opt")
-
-              for search_root in "${SEARCH_ROOTS[@]}"; do
-                [ -d "$search_root" ] || continue
-
-                while IFS= read -r -d '' git_config; do
-                  repository_dir="$(dirname "$(dirname "$git_config")")"
-                  remote_url="$(git -C "$repository_dir" remote get-url origin 2>/dev/null || true)"
-
-                  if [[ "$remote_url" == *"nathanjsilva/app-red-devils"* ]]; then
-                    FRONTEND_DIR="$repository_dir"
-                    break 2
-                  fi
-                done < <(find "$search_root" -maxdepth 3 -type f -path '*/.git/config' -print0 2>/dev/null)
+              API_PARENT="$(dirname "$API_DIR")"
+              for candidate in \
+                "$API_PARENT/app-red-devils" \
+                "$HOME/app-red-devils" \
+                "/var/www/app-red-devils" \
+                "/opt/app-red-devils"; do
+                if [ -d "$candidate/.git" ]; then
+                  FRONTEND_DIR="$candidate"
+                  break
+                fi
               done
             fi
 
