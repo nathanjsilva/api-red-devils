@@ -1,0 +1,85 @@
+name: Deploy frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_dir:
+        description: 'Caminho da pasta do frontend na VPS (opcional; será detectado automaticamente)'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-frontend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Pull, build and restart frontend on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -Eeuo pipefail
+
+            API_DIR="${{ secrets.VPS_APP_DIR }}"
+            REQUESTED_FRONTEND_DIR="${{ inputs.frontend_dir }}"
+            FRONTEND_DIR="$REQUESTED_FRONTEND_DIR"
+
+            if [ -n "$FRONTEND_DIR" ]; then
+              if [ ! -d "$FRONTEND_DIR/.git" ]; then
+                echo "Diretorio informado nao contem repositorio Git: $FRONTEND_DIR"
+                exit 1
+              fi
+            else
+              SEARCH_ROOTS=("$(dirname "$API_DIR")" "$HOME" "/var/www" "/opt")
+
+              for search_root in "${SEARCH_ROOTS[@]}"; do
+                [ -d "$search_root" ] || continue
+
+                while IFS= read -r -d '' git_config; do
+                  repository_dir="$(dirname "$(dirname "$git_config")")"
+                  remote_url="$(git -C "$repository_dir" remote get-url origin 2>/dev/null || true)"
+
+                  if [[ "$remote_url" == *"nathanjsilva/app-red-devils"* ]]; then
+                    FRONTEND_DIR="$repository_dir"
+                    break 2
+                  fi
+                done < <(find "$search_root" -maxdepth 3 -type f -path '*/.git/config' -print0 2>/dev/null)
+              done
+            fi
+
+            if [ -z "$FRONTEND_DIR" ]; then
+              echo "Repositorio app-red-devils nao encontrado na VPS."
+              echo "Informe o caminho usando o input frontend_dir ao executar este workflow."
+              exit 1
+            fi
+
+            echo "Frontend encontrado em: $FRONTEND_DIR"
+            git -C "$FRONTEND_DIR" fetch origin master
+            git -C "$FRONTEND_DIR" checkout master
+            git -C "$FRONTEND_DIR" pull --ff-only origin master
+
+            cd "$FRONTEND_DIR"
+            command -v npm >/dev/null 2>&1 || { echo "npm nao encontrado na VPS."; exit 1; }
+            npm ci
+            npm run build
+
+            if docker compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="docker compose"
+            elif docker-compose version >/dev/null 2>&1; then
+              COMPOSE_CMD="docker-compose"
+            else
+              echo "Docker Compose nao encontrado na VPS."
+              exit 1
+            fi
+
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate --remove-orphans web
+            $COMPOSE_CMD -f docker-compose.prod.yml ps
+            echo "Deploy do frontend concluido com sucesso."
