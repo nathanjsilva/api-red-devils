@@ -31,21 +31,8 @@ jobs:
 
             API_DIR="${{ secrets.VPS_APP_DIR }}"
             echo "Conexao e variaveis iniciais OK"
-            REQUESTED_FRONTEND_DIR="${{ inputs.frontend_dir }}"
-            FRONTEND_DIR="$REQUESTED_FRONTEND_DIR"
-            echo "Input do caminho lido"
-
-            if [ -n "$FRONTEND_DIR" ]; then
-              if [ ! -d "$FRONTEND_DIR/.git" ]; then
-                echo "Diretorio informado nao contem repositorio Git: $FRONTEND_DIR"
-                exit 1
-              fi
-            else
-              FRONTEND_DIR="$API_DIR/../app-red-devils"
-              echo "Caminho irmão do frontend definido"
-            fi
-
-            echo "Selecao do diretorio concluida"
+            FRONTEND_DIR="$API_DIR/../app-red-devils"
+            echo "Caminho irmão do frontend definido"
 
             if [ -z "$FRONTEND_DIR" ]; then
               echo "Repositorio app-red-devils nao encontrado na VPS."
