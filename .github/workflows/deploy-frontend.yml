@@ -40,18 +40,8 @@ jobs:
                 exit 1
               fi
             else
-              API_PARENT="${API_DIR%/*}"
-              echo "Diretorio pai da API identificado"
-              for candidate in \
-                "$API_PARENT/app-red-devils" \
-                "/var/www/app-red-devils" \
-                "/opt/app-red-devils"; do
-                if [ -d "$candidate/.git" ]; then
-                  FRONTEND_DIR="$candidate"
-                  echo "Repositorio encontrado em candidato"
-                  break
-                fi
-              done
+              FRONTEND_DIR="$API_DIR/../app-red-devils"
+              echo "Caminho irmão do frontend definido"
             fi
 
             if [ -z "$FRONTEND_DIR" ]; then
