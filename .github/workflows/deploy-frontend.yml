@@ -40,7 +40,7 @@ jobs:
                 exit 1
               fi
             else
-              API_PARENT="$(dirname "$API_DIR")"
+              API_PARENT="${API_DIR%/*}"
               echo "Diretorio pai da API identificado"
               for candidate in \
                 "$API_PARENT/app-red-devils" \
