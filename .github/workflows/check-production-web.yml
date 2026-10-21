@@ -19,3 +19,5 @@ jobs:
           script: |
             docker inspect app_red_devils_web --format 'container={{.Name}} status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}}' || true
             curl -sS -o /dev/null -w 'local-8080-http=%{http_code}\n' --max-time 10 http://127.0.0.1:8080/ || true
+            docker inspect api_red_devils_nginx --format 'container={{.Name}} status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}}' || true
+            curl -sS -o /dev/null -w 'local-8081-http=%{http_code}\n' --max-time 10 http://127.0.0.1:8081/api/admin/me || true
