@@ -42,7 +42,6 @@ jobs:
               API_PARENT="$(dirname "$API_DIR")"
               for candidate in \
                 "$API_PARENT/app-red-devils" \
-                "$HOME/app-red-devils" \
                 "/var/www/app-red-devils" \
                 "/opt/app-red-devils"; do
                 if [ -d "$candidate/.git" ]; then
