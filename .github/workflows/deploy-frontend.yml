@@ -30,6 +30,7 @@ jobs:
             echo "Iniciando deploy do frontend..."
 
             API_DIR="${{ secrets.VPS_APP_DIR }}"
+            echo "Conexao e variaveis iniciais OK"
             REQUESTED_FRONTEND_DIR="${{ inputs.frontend_dir }}"
             FRONTEND_DIR="$REQUESTED_FRONTEND_DIR"
 
@@ -40,12 +41,14 @@ jobs:
               fi
             else
               API_PARENT="$(dirname "$API_DIR")"
+              echo "Diretorio pai da API identificado"
               for candidate in \
                 "$API_PARENT/app-red-devils" \
                 "/var/www/app-red-devils" \
                 "/opt/app-red-devils"; do
                 if [ -d "$candidate/.git" ]; then
                   FRONTEND_DIR="$candidate"
+                  echo "Repositorio encontrado em candidato"
                   break
                 fi
               done
