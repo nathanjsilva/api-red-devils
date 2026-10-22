@@ -50,11 +50,6 @@ jobs:
           envs: CHAMPIONSHIP_ID
           script_stop: true
           script: |
-            set -eu
-            case "$CHAMPIONSHIP_ID" in
-              ''|*[!0-9]*) echo "ID de campeonato invalido"; exit 1 ;;
-            esac
-
             docker exec -e CHAMPIONSHIP_ID="$CHAMPIONSHIP_ID" api_red_devils_app php -r '
               require "vendor/autoload.php";
               $app = require "bootstrap/app.php";
