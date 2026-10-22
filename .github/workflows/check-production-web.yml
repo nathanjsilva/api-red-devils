@@ -27,7 +27,7 @@ jobs:
               echo "api-last-exception=${LAST_EXCEPTION:-unavailable}"
               exit 1
             fi
-            case "$API_STATUS" in
-              200|401) ;;
-              *) echo "Resposta inesperada da API: $API_STATUS"; exit 1 ;;
-            esac
+            if [ "$API_STATUS" != "200" ] && [ "$API_STATUS" != "401" ]; then
+              echo "Resposta inesperada da API: $API_STATUS"
+              exit 1
+            fi
