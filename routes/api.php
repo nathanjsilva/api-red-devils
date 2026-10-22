@@ -24,6 +24,7 @@ Route::get('/championships/{championship}', [ChampionshipController::class, 'sho
 Route::get('/championships/{championship}/awards', [ChampionshipController::class, 'awards']);
 Route::get('/championships/{championship}/statistics', [ChampionshipController::class, 'statistics']);
 Route::get('/championships/{championship}/rankings', [ChampionshipController::class, 'rankings']);
+Route::get('/championship-teams/{team}/crest', [ChampionshipController::class, 'showCrest']);
 Route::middleware('auth:sanctum')->post('/championship-awards/{category}/votes', [ChampionshipController::class, 'vote']);
 Route::get('/championships/{championship}/voting/players', [ChampionshipVoterController::class, 'players']);
 Route::post('/championships/{championship}/voting/voters', [ChampionshipVoterController::class, 'register'])->middleware('throttle:10,1');

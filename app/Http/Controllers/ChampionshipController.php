@@ -215,6 +215,13 @@ class ChampionshipController extends Controller
         return $team->fresh();
     }
 
+    public function showCrest(ChampionshipTeam $team)
+    {
+        abort_unless($team->crest_path && Storage::disk('public')->exists($team->crest_path), 404);
+
+        return Storage::disk('public')->response($team->crest_path);
+    }
+
     public function updateMatch(Request $request, ChampionshipMatch $match)
     {
         $data = $request->validate(['home_score' => 'required|integer|min:0', 'away_score' => 'required|integer|min:0', 'home_penalty_score' => 'nullable|integer|min:0', 'away_penalty_score' => 'nullable|integer|min:0', 'status' => 'required|in:finished,cancelled']);
