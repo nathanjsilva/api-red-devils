@@ -2,6 +2,11 @@ name: Check production web
 
 on:
   workflow_dispatch:
+    inputs:
+      unstart_championship_id:
+        description: Championship ID to return to setup without deleting records
+        required: false
+        type: string
 
 jobs:
   check:
@@ -31,4 +36,50 @@ jobs:
               echo "Resposta inesperada da API: $API_STATUS"
               exit 1
             fi
-            docker exec api_red_devils_mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" --batch --skip-column-names -e "SELECT c.id, c.status, c.phase, (SELECT COUNT(*) FROM championship_matches m WHERE m.championship_id = c.id) AS matches, (SELECT COUNT(*) FROM championship_matches m WHERE m.championship_id = c.id AND (m.home_score IS NOT NULL OR m.away_score IS NOT NULL)) AS scored_matches, (SELECT COUNT(*) FROM championship_match_events e JOIN championship_matches m ON m.id = e.match_id WHERE m.championship_id = c.id) AS events, (SELECT COUNT(*) FROM championship_match_participations p JOIN championship_matches m ON m.id = p.match_id WHERE m.championship_id = c.id) AS participations, (SELECT COUNT(*) FROM championship_odds o JOIN championship_matches m ON m.id = o.match_id WHERE m.championship_id = c.id) AS odds, (SELECT COUNT(*) FROM championship_teams t WHERE t.championship_id = c.id) AS teams, (SELECT COUNT(*) FROM championship_players cp WHERE cp.championship_id = c.id) AS players, (SELECT COUNT(*) FROM championship_voters v WHERE v.championship_id = c.id) AS voters FROM championships c ORDER BY c.id"' | while IFS= read -r row; do echo "production-championship=$row"; done
+
+      - name: Return production championship to setup when requested
+        if: ${{ inputs.unstart_championship_id != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          CHAMPIONSHIP_ID: ${{ inputs.unstart_championship_id }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          envs: CHAMPIONSHIP_ID
+          script_stop: true
+          script: |
+            set -eu
+            case "$CHAMPIONSHIP_ID" in
+              ''|*[!0-9]*) echo "ID de campeonato invalido"; exit 1 ;;
+            esac
+
+            docker exec -e CHAMPIONSHIP_ID="$CHAMPIONSHIP_ID" api_red_devils_app php -r '
+              require "vendor/autoload.php";
+              $app = require "bootstrap/app.php";
+              $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+              $id = filter_var(getenv("CHAMPIONSHIP_ID"), FILTER_VALIDATE_INT);
+              if (!$id) { throw new RuntimeException("ID invalido"); }
+              $result = \Illuminate\Support\Facades\DB::transaction(function () use ($id) {
+                $championship = \Illuminate\Support\Facades\DB::table("championships")->where("id", $id)->lockForUpdate()->first();
+                if (!$championship) { throw new RuntimeException("Campeonato nao encontrado"); }
+                if ($championship->status === "draft" && $championship->phase === "setup") { return "already-in-setup"; }
+                if ($championship->status !== "active" || $championship->phase !== "group") { throw new RuntimeException("Estado atual nao permite retorno seguro ao setup"); }
+                $matches = \Illuminate\Support\Facades\DB::table("championship_matches")->where("championship_id", $id)->lockForUpdate()->get(["id", "status", "home_score", "away_score", "home_penalty_score", "away_penalty_score", "qualified_team_id"]);
+                if ($matches->isEmpty()) { throw new RuntimeException("Nenhuma partida encontrada; estado nao alterado"); }
+                foreach ($matches as $match) {
+                  if ($match->status !== "scheduled" || $match->home_score !== null || $match->away_score !== null || $match->home_penalty_score !== null || $match->away_penalty_score !== null || $match->qualified_team_id !== null) { throw new RuntimeException("Ha partidas iniciadas ou com resultado; estado nao alterado"); }
+                }
+                $matchIds = $matches->pluck("id");
+                foreach (["championship_match_events", "championship_match_participations", "championship_odds"] as $table) {
+                  if (\Illuminate\Support\Facades\DB::table($table)->whereIn("match_id", $matchIds)->exists()) { throw new RuntimeException("Ha dados de jogo registrados; estado nao alterado"); }
+                }
+                \Illuminate\Support\Facades\DB::table("championships")->where("id", $id)->update(["status" => "draft", "phase" => "setup", "updated_at" => now()]);
+                return "returned-to-setup";
+              });
+              $c = \Illuminate\Support\Facades\DB::table("championships")->where("id", $id)->first();
+              $matches = \Illuminate\Support\Facades\DB::table("championship_matches")->where("championship_id", $id);
+              echo "production-championship={$id} {$c->status} {$c->phase} matches=".$matches->count()." teams=".\Illuminate\Support\Facades\DB::table("championship_teams")->where("championship_id", $id)->count()." players=".\Illuminate\Support\Facades\DB::table("championship_players")->where("championship_id", $id)->count()." voters=".\Illuminate\Support\Facades\DB::table("championship_voters")->where("championship_id", $id)->count()." operation={$result}".PHP_EOL;
+              if ($c->status !== "draft" || $c->phase !== "setup") { throw new RuntimeException("Verificacao final falhou"); }
+            '
