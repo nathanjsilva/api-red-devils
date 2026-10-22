@@ -129,7 +129,7 @@ echo "Subindo aplicacao e Nginx..."
 run_compose up -d --build app nginx
 
 echo "Ajustando permissoes e cache..."
-run_compose exec -T app sh -lc "chown -R www-data:www-data storage bootstrap/cache && find storage bootstrap/cache -type d -exec chmod ug+rwx {} + && find storage bootstrap/cache -type f ! -name .gitignore -exec chmod ug+rw {} +"
+run_compose exec -T app sh -lc "mkdir -p storage/app/public/championship-crests && chown -R www-data:www-data storage bootstrap/cache && find storage bootstrap/cache -type d -exec chmod ug+rwx {} + && find storage bootstrap/cache -type f ! -name .gitignore -exec chmod ug+rw {} +"
 run_compose exec -T app php artisan migrate --force
 run_compose exec -T app php artisan optimize:clear
 run_compose exec -T app php artisan config:cache
