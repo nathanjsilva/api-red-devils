@@ -41,6 +41,11 @@ jobs:
             fi
 
             echo "Frontend encontrado em: $FRONTEND_DIR"
+            if ! git -C "$FRONTEND_DIR" diff --quiet -- src/utils/constants.ts || ! git -C "$FRONTEND_DIR" diff --cached --quiet -- src/utils/constants.ts; then
+              STASH_NAME="pre-deploy-frontend-$(date -u +%Y%m%dT%H%M%SZ)"
+              git -C "$FRONTEND_DIR" stash push --message "$STASH_NAME" -- src/utils/constants.ts
+              echo "Edicao local preservada no stash: $STASH_NAME"
+            fi
             git -C "$FRONTEND_DIR" fetch origin master
             git -C "$FRONTEND_DIR" checkout master
             git -C "$FRONTEND_DIR" pull --ff-only origin master
