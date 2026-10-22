@@ -195,6 +195,9 @@ class ChampionshipVoterController extends Controller
                 $category = ChampionshipAwardCategory::query()->whereKey($category->id)->lockForUpdate()->firstOrFail();
                 abort_if($category->type !== 'vote' || $category->published || ! $category->voting_open, 422, 'Esta categoria não está recebendo votos.');
 
+                $championship = Championship::query()->whereKey($category->championship_id)->lockForUpdate()->firstOrFail();
+                abort_if($championship->status !== 'finished', 422, 'A votação só será liberada após o encerramento do campeonato.');
+
                 $candidate = ChampionshipPlayer::query()
                     ->whereKey($data['candidate_id'])
                     ->where('championship_id', $category->championship_id)
