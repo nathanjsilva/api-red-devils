@@ -23,7 +23,7 @@
 | `MatchPlayer` | `match_players` | `player_id`, `pelada_id`, `goals`, `assists`, `goals_conceded`, `result` (`win`\|`loss`\|`draw`, **NOT NULL**) | `belongsTo Player`, `belongsTo Pelada` |
 | `Team` | `teams` | `pelada_id`, `name` | `belongsTo Pelada`, `belongsToMany Player` via `team_players` |
 | `TeamPlayer` | `team_players` | `team_id`, `player_id` | tabela pivô de `Team` ↔ `Player` |
-| `Championship` e entidades relacionadas | `championships`, `championship_teams`, `championship_players`, `championship_matches`, `championship_match_events`, `championship_match_participations`, `championship_odds`, `championship_award_categories`, `championship_votes` e tabelas auxiliares | `championship_id`, relações de equipes, jogadores, goleiros, partidas, eventos, classificação, playoffs, estatísticas, odds, premiações e auditoria |
+| `Championship` e entidades relacionadas | `championships`, `championship_teams`, `championship_players`, `championship_voters`, `championship_matches`, `championship_match_events`, `championship_match_participations`, `championship_odds`, `championship_award_categories`, `championship_votes` e tabelas auxiliares | `championship_id`, relações de equipes, jogadores, votantes, partidas, eventos, classificação, playoffs, estatísticas, odds, premiações e auditoria |
 
 Ponto importante: **`User` (autenticação/admin) e `Player` (atleta cadastrado) são entidades separadas e desacopladas.** `Player` não tem login, email ou senha — é apenas um cadastro de atleta gerenciado por quem estiver autenticado como `User` admin. Isso é diferente do que o `README.md` descreve (ele fala de jogador com email/senha fazendo login e se auto-cadastrando via rota pública) — **essa parte do README está obsoleta**, não reflita esse fluxo no código.
 
@@ -53,7 +53,9 @@ Fonte de verdade: [`routes/api.php`](../routes/api.php). Detalhe completo por á
 - `GET /api/teams/pelada/{id}/...` (fields/players/players-with-statistics/organized) — **públicas** (antes eram admin-only).
 - `GET /api/statistics/*` — rankings e estatísticas, públicas, paginadas.
 - `GET /api/championships`, `GET /api/championships/{id}`, `/awards`, `/statistics` e `/rankings` — leitura pública do campeonato.
-- `POST /api/championship-awards/{category}/votes` — votação autenticada em premiações.
+- `/api/championships/{id}/voting/*` e `POST /api/championship-votes/{category}` — cadastro e identificação por PIN, status privado e votação por sessão.
+- `POST /api/championship-awards/{category}/votes` — rota legada autenticada para voto; compartilha as restrições de voto único.
+- `/api/admin/championships/{id}/voters` e `/api/admin/championship-voters/{id}/*` — leitura, correção de vínculo e redefinição de PIN, exclusivamente admin.
 - `/api/admin/championships/*`, `/api/admin/championship-teams/*`, `/api/admin/championship-matches/*` e `/api/admin/championship-awards/*` — operações administrativas do campeonato; consultar [backend/contexts/championships.md](backend/contexts/championships.md).
 - `POST /api/admin/logout`, `GET /api/admin/me` — exigem admin.
 - `admin/players`, `admin/peladas`, `admin/teams/.../organize`, `admin/peladas/{id}/organize-teams`, `admin/match-players` — escrita de cada domínio, todos exigindo admin.

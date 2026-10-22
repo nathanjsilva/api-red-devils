@@ -222,7 +222,7 @@ Paredão aceita somente goleiros. Xerifão exige um jogador inscrito com posiç�
 
 ## 14. Votação
 
-A votação exige que:
+A rota de votação legada (`POST /championship-awards/{category}/votes`) exige que:
 
 - O usuário esteja autenticado.
 - A conta esteja vinculada a um jogador.
@@ -233,6 +233,8 @@ A votação exige que:
 - O candidato pertença ao campeonato.
 - O eleitor não vote em si mesmo.
 - O usuário vote no máximo uma vez por categoria.
+
+O cadastro simples por PIN e a sessão independente são o fluxo público recomendado e estão especificados na seção 21. Ambos os fluxos compartilham a verificação de voto anterior por inscrição.
 
 Os votos são persistidos individualmente. As categorias permanecem disponíveis até que um administrador encerre a votação globalmente após o encerramento esportivo. Depois disso, o administrador pode publicar os resultados, que mostram vencedor, quantidade de votos e percentual de votos válidos.
 
@@ -260,3 +262,94 @@ O fluxo esperado é:
 10. Encerrar a votação das premiações.
 11. Publicar os resultados.
 12. Consultar o campeão, campanha, estatísticas e premiações no painel público.
+
+## 17. Entidades e integridade referencial
+
+- `championships` é a raiz do agregado. Equipes, inscrições, partidas, categorias de premiação, sorteios de goleiros, desempates e auditoria pertencem a um campeonato.
+- `championship_players` liga um `Player` global a um campeonato e guarda tipo, Pedra, classificação decimal e posição esportiva. A inscrição não copia nem altera o cadastro global.
+- `championship_team_players` liga cada inscrição a no máximo uma equipe. O vínculo de goleiro é criado junto com a inscrição; os vínculos dos jogadores de linha são substituídos pela operação de formação.
+- `championship_matches` referencia duas equipes do campeonato. Eventos, participações e odds pertencem à partida; resultado e pênaltis são campos distintos.
+- Eventos e participações referenciam inscrições do campeonato, não cadastros de jogador de outros campeonatos. Apagar um campeonato apaga suas entidades subordinadas por cascata; apagar um jogador global inscrito é bloqueado enquanto houver inscrição.
+- Categorias, votos e resultados pertencem ao campeonato por meio da categoria. O voto identifica o eleitor e o candidato; resultado publicado não altera os votos individuais.
+- `users.player_id` é um vínculo administrativo legado entre conta e cadastro global do jogador. Ele não substitui o cadastro simplificado de votante descrito na seção 21.
+
+## 18. Estados, operações e pré/pós-condições
+
+| Operação | Pré-condições | Resultado e restrições |
+|---|---|---|
+| Criar campeonato | Administrador autenticado; nome obrigatório com até 100 caracteres | Cria em `draft`/`setup`, cinco equipes padrão e quinze categorias. |
+| Inscrever atleta | Campeonato `draft`; atleta global existente; tipo compatível; limite e classificação disponíveis | Cria uma inscrição; goleiro exige equipe do mesmo campeonato ainda sem goleiro. |
+| Formar equipes | Campeonato `draft`; cinco equipes próprias e cinco inscrições de linha distintas por equipe | Em uma transação substitui os vínculos de linha; falha de validação preserva a formação anterior. Goleiros permanecem vinculados. |
+| Iniciar | Campeonato `draft`; cinco equipes completas, 25 atletas de linha (uma Pedra por equipe) e cinco goleiros (um por equipe) | Muda para `active`/`group` e registra auditoria. |
+| Gerar primeira fase | Campeonato ativo; cinco equipes | Cria dez partidas únicas em cinco rodadas, sem duplicar confrontos em nova chamada. |
+| Finalizar partida | Partida existente; placares inteiros não negativos; desempate por pênaltis em mata-mata empatado | Atualiza placar/status; vitória/empate alimenta tabela. A final concluída encerra o campeonato. |
+| Gerar playoffs | Campeonato na fase de grupos; dez partidas de grupo concluídas | Salva snapshot da classificação e cria `2º x 5º` e `3º x 4º`; chamadas repetidas não recriam semifinais. |
+| Registrar evento/participação | Atleta inscrito em uma das equipes da partida; evento associado à equipe válida | Recalcula o placar pelos gols e gols contra; MVP e eventos só podem usar participantes válidos. |
+| Encerrar votação | Administrador autenticado; campeonato esportivamente encerrado | Fecha globalmente as categorias de voto ainda abertas e registra auditoria. |
+| Publicar prêmios | Campeonato encerrado; nenhuma categoria de voto permanece aberta | Calcula Garçom/Artilheiro, consolida votos e torna resultados públicos. |
+
+Estados de campeonato persistidos: `draft`, `active`, `playoffs` e `finished`; fases: `setup`, `group`, `playoffs` e `finished`. Partidas persistem `scheduled`, `in_progress`, `finished` ou `cancelled`. A API de atualização de partida aceita atualmente `finished` e `cancelled`; não se deve afirmar que há uma operação pública para marcar `in_progress` sem que ela seja implementada.
+
+## 19. Acesso e superfície administrativa/pública
+
+- Leituras de campeonatos, detalhes, tabela, partidas, estatísticas, rankings e categorias são públicas.
+- A criação e gestão de equipes, inscrições, formação, partidas, eventos, participações, odds, desempates, votação e premiações exige `auth:sanctum` e perfil `admin`, salvo a ação de votar.
+- O fluxo de votação existente aceita conta Sanctum vinculada a atleta inscrito; o cadastro simples por PIN é adicionado na seção 21 e é independente da autenticação administrativa.
+- Brasões aceitam JPG/JPEG/PNG/WEBP até 2 MB. Troca e remoção alteram o arquivo público associado à equipe; a troca registra auditoria.
+- Erros de validação retornam HTTP 422; falta de autenticação administrativa retorna 401; perfil não administrador retorna 403; recurso inexistente retorna 404.
+- A área pública não expõe resultados de prêmio enquanto `published=false`. A votação termina apenas quando o administrador encerra as categorias; encerramento esportivo e encerramento de votação são operações distintas.
+
+## 20. Critérios verificáveis do módulo existente
+
+1. Criar campeonato administrativo gera exatamente cinco equipes e quinze categorias (13 de voto, abertas inicialmente, e duas estatísticas automáticas).
+2. Inscrição repetida, tipo incompatível, classificação duplicada/incompatível, equipe externa ou limite excedido é rejeitado sem duplicar dados.
+3. Uma formação válida tem cinco jogadores de linha, uma Pedra de cada grupo, em cada equipe; uma tentativa inválida não apaga a formação existente.
+4. Os dez confrontos de grupo cobrem cada par de equipes uma única vez; cada rodada contém dois jogos e uma folga.
+5. Apenas partidas finalizadas alimentam classificação e estatísticas. Pontuação é 3/1/0; gols contra favorecem o adversário e não contam como gol do autor; pênaltis não contam na artilharia.
+6. Playoffs não podem ser criados com partida de grupo pendente; ao criá-los, o snapshot não muda depois que resultados de grupo são editados.
+7. Participantes, autores, assistentes e MVP precisam pertencer às equipes da partida; assistente não pode ser o autor. Uma edição/exclusão de evento recalcula o placar.
+8. Odds são informativas, retornam probabilidades normalizadas e parâmetros do Poisson utilizado.
+9. Voto em categoria fechada/publicada, candidato externo, auto-voto ou repetição deve ser rejeitado; categoria Paredão exige goleiro e Xerifão exige posição defensiva elegível.
+10. Resultados de votação não são públicos antes da publicação e as operações administrativas não são acessíveis a visitante ou conta comum.
+
+## 21. Cadastro simplificado de votantes (PIN)
+
+Esta seção descreve o novo acesso do módulo de premiações, separado de `users`, email, telefone e login administrativo.
+
+### Cadastro, identificação e sessão
+
+- O cadastro existe por campeonato e por inscrição `championship_players`: cada inscrição pode ter no máximo um votante, garantido por índice `UNIQUE` no banco.
+- A tela pública oferece os nomes dos jogadores inscritos no campeonato. O participante escolhe a própria inscrição, informa um PIN numérico de exatamente seis dígitos e o confirma.
+- O servidor valida o campeonato/inscrição e persiste somente o hash seguro do PIN. Não coleta email, telefone, senha de conta ou verificação externa. Cadastro não comprova a identidade real do jogador.
+- Um cadastro existente impede um segundo cadastro para a mesma inscrição. O participante se identifica selecionando o nome e fornecendo o PIN.
+- Após PIN correto, a API emite uma sessão aleatória válida por 12 horas; o banco guarda apenas o hash do token. Identificação e status de votos usam esse token validado, nunca um ID de eleitor enviado livremente pelo cliente.
+- PIN incorreto incrementa o contador de tentativas. Após cinco erros consecutivos, o cadastro fica bloqueado por 15 minutos. Uma identificação válida zera o contador. O cliente não recebe hash nem informação que permita enumerar PINs.
+- Encerrar/redefinir sessão ou alterar vínculo administrativo invalida a sessão corrente. Uma nova identificação recupera os votos anteriores associados ao mesmo cadastro.
+
+### Votos, categorias e concorrência
+
+- O votante precisa estar identificado por sessão válida; deve pertencer ao campeonato da categoria e a categoria deve estar aberta, não publicada e ser do tipo `vote`.
+- Cada inscrição pode registrar no máximo um voto por categoria e campeonato. A validação é feita no backend e a unicidade é garantida no banco; requisições concorrentes não criam dois votos.
+- O candidato deve pertencer ao mesmo campeonato, ser elegível para a categoria e não ser a própria inscrição do votante. Paredão aceita goleiro; Xerifão aceita `defensor`, `zagueiro`, `fixo` ou `ala`.
+- O status privado do votante lista categorias disponíveis e categoria já votada. Depois de votar, a categoria mostra **Voto realizado** e fica bloqueada para aquele votante; as demais categorias abertas continuam disponíveis.
+- A sessão de votação é independente de `auth:sanctum` usado por administradores. Rotas de gestão de votantes são sempre protegidas por `auth:sanctum` e `admin`.
+
+### Gestão administrativa e histórico
+
+- Administrador pode listar cadastros, inscrição/jogador vinculado e categorias votadas; não pode consultar PIN em texto nem seu hash.
+- Administrador pode redefinir o PIN e trocar o vínculo para outra inscrição do mesmo campeonato. O novo jogador não pode estar associado a outro cadastro.
+- Ao trocar o vínculo, a API registra no log de auditoria campeonato, cadastro, vínculo antigo, vínculo novo, administrador e horário. Votos anteriores permanecem ligados ao cadastro e não são excluídos, transferidos ou reescritos.
+- Conflito de campeonato ou jogador já vinculado bloqueia a operação com explicação; a mudança bem-sucedida aparece na próxima identificação.
+
+### Critérios de aceitação E2E para votantes
+
+1. Cadastro com PIN válido cria um único votante; PIN curto, não numérico ou confirmação divergente é rejeitado.
+2. Segundo cadastro para a mesma inscrição é rejeitado inclusive sob concorrência.
+3. PIN correto permite entrar e recuperar status; PIN incorreto é rejeitado e cinco erros acionam bloqueio temporário.
+4. Sem sessão, com token expirado ou com token inválido, não é possível consultar status privado nem votar.
+5. Uma sessão pode votar em categorias distintas; repetição da mesma categoria é rejeitada pelo backend e índice único mesmo em chamadas simultâneas.
+6. Candidato de outro campeonato, auto-voto, posição inelegível, categoria estatística, fechada ou publicada é rejeitado.
+7. Administrador consegue localizar votante, trocar vínculo dentro do campeonato e redefinir PIN; jogador já vinculado ou pertencente a outro campeonato é rejeitado.
+8. A troca registra auditoria e preserva votos já realizados; novo PIN autentica e o PIN anterior deixa de autenticar.
+9. Usuário sem perfil admin não consegue listar ou alterar cadastros.
+10. Encerramento, apuração e publicação seguem as regras das seções 13–15; o cadastro por PIN não permite publicar nem alterar votos.

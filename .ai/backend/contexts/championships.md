@@ -9,13 +9,15 @@ O módulo administra campeonatos independentes das peladas tradicionais: cinco e
 ## Arquivos envolvidos
 
 - `app/Http/Controllers/ChampionshipController.php` — leitura pública e operações administrativas do campeonato.
+- `app/Http/Controllers/ChampionshipVoterController.php` — cadastro, sessão, status e votos públicos por PIN.
+- `app/Http/Controllers/Admin/ChampionshipVoterController.php` — consulta e manutenção administrativa dos cadastros de votação.
 - `app/Models/Championship.php` — campeonato e relações com equipes, participantes, partidas, desempates, auditoria e premiações.
 - `app/Models/ChampionshipTeam.php` — equipes, brasões e participantes.
 - `app/Models/ChampionshipPlayer.php` — inscrição do jogador global no campeonato, com tipo e Pedra próprios.
 - `app/Models/ChampionshipMatch.php` — partidas, placares, pênaltis, eventos, participações e odds.
 - `app/Models/ChampionshipMatchEvent.php` — gols, assistências, equipe do evento, minuto e gol contra.
 - `app/Models/ChampionshipMatchParticipation.php` — participantes e MVP.
-- `app/Models/ChampionshipAwardCategory.php`, `ChampionshipAwardResult.php`, `ChampionshipVote.php` — premiações, resultados e votos.
+- `app/Models/ChampionshipAwardCategory.php`, `ChampionshipAwardResult.php`, `ChampionshipVote.php`, `ChampionshipVoter.php` — premiações, resultados, votos e cadastro por PIN.
 - `app/Models/ChampionshipGoalkeeperDraw.php`, `ChampionshipTieBreaker.php`, `ChampionshipAuditLog.php` — histórico legado, desempates e auditoria.
 - `app/Services/ChampionshipFixtureService.php` — dez jogos de turno único em cinco rodadas.
 - `app/Services/ChampionshipValidationService.php` — validação da configuração antes do início.
@@ -38,6 +40,11 @@ O módulo administra campeonatos independentes das peladas tradicionais: cinco e
 | `GET` | `/championships/{championship}/statistics` | Estatísticas individuais, com filtro opcional `phase` |
 | `GET` | `/championships/{championship}/rankings` | Rankings de gols, assistências, MVP e goleiros, com filtro opcional `phase` |
 | `POST` | `/championship-awards/{category}/votes` | Voto de participante autenticado |
+| `GET` | `/championships/{championship}/voting/players` | Lista pública de nomes inscritos para identificação |
+| `POST` | `/championships/{championship}/voting/voters` | Cadastro público por inscrição e PIN de seis dígitos |
+| `POST` | `/championships/{championship}/voting/session` | Identifica inscrição usando PIN e emite sessão de 12 horas |
+| `GET/DELETE` | `/championships/{championship}/voting/session` | Consulta status privado ou encerra sessão pelo cabeçalho `X-Championship-Voter-Session` |
+| `POST` | `/championship-votes/{category}` | Voto por sessão validada, sem aceitar ID do eleitor no corpo |
 
 A votação exige `auth:sanctum`; as demais rotas acima são públicas.
 
@@ -60,6 +67,9 @@ Todas ficam no grupo `middleware(['auth:sanctum', 'admin'])->prefix('admin')`.
 | `POST/DELETE` | `/admin/championship-teams/{team}/crest` | Envia ou remove brasão |
 | `POST` | `/admin/championships/{championship}/awards/publish` | Consolida e publica premiações |
 | `PUT` | `/admin/championships/{championship}/awards/voting-state` | Encerra todas as votações do campeonato |
+| `GET` | `/admin/championships/{championship}/voters` | Lista votantes, vínculo e categorias votadas sem expor PIN/hash |
+| `PUT` | `/admin/championship-voters/{voter}/player` | Corrige vínculo no mesmo campeonato, registra auditoria e invalida sessão |
+| `PUT` | `/admin/championship-voters/{voter}/pin` | Redefine PIN, zera tentativas e invalida sessão |
 | `PUT` | `/admin/championship-matches/{match}` | Finaliza/cancela partida e registra pênaltis |
 | `POST` | `/admin/championship-matches/{match}/events` | Cria gol, assistência ou gol contra |
 | `PUT/DELETE` | `/admin/championship-events/{event}` | Altera/remove evento e recalcula placar |
@@ -81,7 +91,10 @@ Todas ficam no grupo `middleware(['auth:sanctum', 'admin'])->prefix('admin')`.
 - Estatísticas consideram apenas partidas finalizadas e válidas.
 - Odds são informativas, calculadas por Poisson e persistidas com os parâmetros do cálculo; não há apostas financeiras.
 - Existem quinze premiações. Artilheiro e Garçom são automáticos; as outras categorias usam votação.
-- Voto fica disponível até o encerramento global pelo administrador, exige conta autenticada vinculada a jogador inscrito, um voto por categoria e impede auto-voto.
+- Voto fica disponível até o encerramento global pelo administrador. A rota legada exige conta autenticada vinculada a jogador inscrito; o fluxo simples usa sessão por PIN. Ambos permitem um voto por inscrição/categoria e impedem auto-voto.
+- O cadastro simplificado associa no máximo um votante a cada inscrição por campeonato; PIN é armazenado com hash, a sessão de 12 horas guarda token apenas em hash e cinco erros bloqueiam por 15 minutos.
+- A unicidade por categoria é garantida pelos índices da tabela de votos para o cadastro simplificado e para a inscrição votante, além da validação transacional do backend. Votos anteriores permanecem ligados ao cadastro de votante mesmo após correção administrativa de jogador.
+- Administração de cadastros exige `auth:sanctum` e `admin`; a mudança registra IDs anteriores/novos, administrador e timestamp no log de auditoria. Redefinição de PIN nunca registra o valor ou hash em auditoria.
 
 ## Respostas e serialização
 

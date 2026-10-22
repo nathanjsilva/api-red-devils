@@ -8,4 +8,5 @@ class ChampionshipPlayer extends Model
     public function player() { return $this->belongsTo(Player::class); }
     public function championship() { return $this->belongsTo(Championship::class); }
     public function teams() { return $this->belongsToMany(ChampionshipTeam::class, 'championship_team_players'); }
+    public function voter() { return $this->hasOne(ChampionshipVoter::class); }
 }
