@@ -20,4 +20,10 @@ jobs:
             docker inspect app_red_devils_web --format 'container={{.Name}} status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}}' || true
             curl -sS -o /dev/null -w 'local-8080-http=%{http_code}\n' --max-time 10 http://127.0.0.1:8080/ || true
             docker inspect api_red_devils_nginx --format 'container={{.Name}} status={{.State.Status}} running={{.State.Running}} exit={{.State.ExitCode}}' || true
-            curl -sS -o /dev/null -w 'local-8081-http=%{http_code}\n' --max-time 10 http://127.0.0.1:8081/api/admin/me || true
+            API_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:8081/api/admin/me)"
+            echo "local-8081-http=$API_STATUS"
+            if [ "$API_STATUS" = "500" ]; then
+              LAST_EXCEPTION="$(docker exec api_red_devils_app sh -lc "grep -h 'production.ERROR:' storage/logs/laravel*.log 2>/dev/null | tail -n 1 | grep -oE '[A-Za-z0-9_]+(Exception|Error)' | tail -n 1 | head -c 120" || true)"
+              echo "api-last-exception=${LAST_EXCEPTION:-unavailable}"
+              exit 1
+            fi
