@@ -60,8 +60,10 @@ Padrões observados no código existente. Siga-os por consistência, mesmo quand
 
 ## Testes
 
-- `tests/TestCase.php` é o único arquivo de teste presente hoje — não há suíte de testes de feature/unit ainda escrita. Se o usuário pedir testes, siga convenção padrão do Laravel (`tests/Feature`, `tests/Unit`) e use os `database/factories/*Factory.php` já existentes (`PlayerFactory`, `PeladaFactory`, `MatchPlayerFactory`, `UserFactory`). `MatchPlayerFactory` usa `result` (não `is_winner`).
+Existem testes Feature ativos em tests/Feature para estatísticas, histórico de jogador, divisão de pelada, organização de goleiros e fluxos/módulo de campeonato. tests/TestCase.php define a base. Não descreva o repositório como sem suíte de testes.
 
-## Formatação
+phpunit.xml usa MySQL e um banco de teste dedicado, pois algumas migrations existentes usam ALTER TABLE ... MODIFY incompatível com SQLite. Não use dados de produção. A suíte não foi executada como parte desta auditoria documental.
+
+O frontend mantém testes Vitest em app-red-devils/src/test para componentes, composables e fluxo de votação. Mudanças que alterem regra de negócio ou contrato devem revisar testes dos dois lados da API.## Formatação
 
 - `laravel/pint` está nas dependências de dev (`composer.json`) — rodar `./vendor/bin/pint` (ou `docker-compose exec app ./vendor/bin/pint`) antes de considerar uma alteração de PHP finalizada, se o usuário pedir formatação/lint.

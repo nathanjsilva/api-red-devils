@@ -29,14 +29,14 @@ class ChampionshipVoterController extends Controller
                     : DB::table('users')->whereRaw('1 = 0')->select('id');
                 $legacyCategories = ChampionshipVote::query()
                     ->whereIn('voter_id', $legacyVoterIds)
-                    ->whereHas('category', fn ($query) => $query->where('championship_id', $championship->id))
+                    ->whereHas('category', fn ($query) => $query->available()->where('championship_id', $championship->id))
                     ->with('category')
                     ->get()
                     ->pluck('category');
                 $categories = $voter->votes
                     ->pluck('category')
                     ->merge($legacyCategories)
-                    ->filter()
+                    ->filter(fn ($category) => $category && $category->isAvailable())
                     ->unique('id')
                     ->values()
                     ->map(fn ($category) => ['id' => $category->id, 'name' => $category->name]);

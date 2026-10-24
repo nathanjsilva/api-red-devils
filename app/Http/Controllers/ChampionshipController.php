@@ -122,9 +122,9 @@ class ChampionshipController extends Controller
         return ['message' => 'Equipes formadas com sucesso.'];
     }
 
-    public function generateFixtures(Championship $championship, ChampionshipFixtureService $service)
+    public function generateFixtures(Championship $championship, ChampionshipFixtureService $service, ChampionshipValidationService $validator)
     {
-        $service->generate($championship);
+        $service->generate($championship, $validator);
 
         return ['message' => 'Confrontos gerados.'];
     }
@@ -245,6 +245,7 @@ class ChampionshipController extends Controller
     public function addEvent(Request $request, ChampionshipMatch $match)
     {
         abort_if($match->status === 'finished', 422, 'Partidas finalizadas não podem receber novos eventos.');
+        abort_if($match->status === 'cancelled', 422, 'Partidas canceladas não podem receber novos eventos.');
         $data = array_merge(
             ['scorer_id' => null, 'assist_id' => null, 'own_goal' => false, 'minute' => null],
             $request->validate(['scorer_id' => 'nullable|exists:championship_players,id', 'assist_id' => 'nullable|exists:championship_players,id', 'team_id' => 'required|exists:championship_teams,id', 'own_goal' => 'boolean', 'minute' => 'nullable|integer|min:0|max:150']),
@@ -270,6 +271,7 @@ class ChampionshipController extends Controller
 
     public function updateEvent(Request $request, ChampionshipMatchEvent $event)
     {
+        abort_if($event->match->status !== 'scheduled', 422, 'Eventos só podem ser alterados em partidas agendadas.');
         $data = $request->validate(['minute' => 'nullable|integer|min:0|max:150', 'own_goal' => 'boolean']);
         $event->update($data);
         $this->recalculateMatchScore($event->match);
@@ -280,6 +282,7 @@ class ChampionshipController extends Controller
     public function deleteEvent(ChampionshipMatchEvent $event)
     {
         $match = $event->match;
+        abort_if($match->status !== 'scheduled', 422, 'Eventos só podem ser alterados em partidas agendadas.');
         $event->delete();
         $this->recalculateMatchScore($match);
 
@@ -288,6 +291,7 @@ class ChampionshipController extends Controller
 
     public function setParticipation(Request $request, ChampionshipMatch $match)
     {
+        abort_if($match->status !== 'scheduled', 422, 'Participações só podem ser alteradas em partidas agendadas.');
         $data = $request->validate([
             'championship_player_ids' => 'required|array',
             'championship_player_ids.*' => 'required|integer|distinct|exists:championship_players,id',
@@ -329,11 +333,16 @@ class ChampionshipController extends Controller
         return $service->calculate($match);
     }
 
+    public function calculateChampionshipOdds(Championship $championship, ChampionshipOddsService $service)
+    {
+        return ['calculated_matches' => $service->calculateUpcoming($championship)];
+    }
+
     public function awards(Championship $championship)
     {
         $players = $championship->players()->with('player')->get();
 
-        return $championship->awardCategories()->with('results.winner.player')->get()->map(function ($category) use ($players) {
+        return $championship->awardCategories()->available()->with('results.winner.player')->get()->map(function ($category) use ($players) {
             $category->candidates = $players->filter(fn ($p) => ! $category->goalkeepers_only || $p->player_type === 'goalkeeper')->values();
 
             return $category;
@@ -355,7 +364,7 @@ class ChampionshipController extends Controller
                 abort_if(! $participant, 403, 'Você não está inscrito neste campeonato.');
 
                 $category = ChampionshipAwardCategory::query()->whereKey($category->id)->lockForUpdate()->firstOrFail();
-                abort_if($category->type !== 'vote' || $category->published || ! $category->voting_open, 422, 'Esta categoria não está recebendo votos.');
+                abort_if(! $category->isAvailable() || $category->type !== 'vote' || $category->published || ! $category->voting_open, 422, 'Esta categoria não está recebendo votos.');
 
                 $championship = Championship::query()->whereKey($category->championship_id)->lockForUpdate()->firstOrFail();
                 abort_if($championship->status !== 'finished', 422, 'A votação só será liberada após o encerramento do campeonato.');
@@ -397,21 +406,21 @@ class ChampionshipController extends Controller
     public function publishAwards(Championship $championship, ChampionshipAwardService $service)
     {
         abort_if($championship->status !== 'finished', 422, 'A votação só pode ser publicada após o encerramento esportivo.');
-        abort_if($championship->awardCategories()->where('type', 'vote')->where('published', false)->where('voting_open', true)->exists(), 422, 'Encerre a votação antes de publicar os resultados.');
+        abort_if($championship->awardCategories()->available()->where('type', 'vote')->where('published', false)->where('voting_open', true)->exists(), 422, 'Encerre a votação antes de publicar os resultados.');
         $stats = collect(app(ChampionshipStatisticsService::class)->calculate($championship));
-        foreach ($championship->awardCategories()->where('type', 'statistic')->get() as $category) {
+        foreach ($championship->awardCategories()->available()->where('type', 'statistic')->get() as $category) {
             $field = str_contains($category->name, 'Garçom') ? 'assists' : 'goals';
             $winner = $stats->sortByDesc($field)->first();
             if ($winner) {
                 ChampionshipAwardResult::updateOrCreate(['championship_award_category_id' => $category->id, 'winner_id' => $championship->players()->where('player_id', $winner['player']['id'])->value('id')], ['votes' => 0, 'percentage' => 100]);
             } $category->update(['published' => true]);
         }
-        $championship->awardCategories()->where('type', 'vote')->each(function ($category) use ($service) {
+        $championship->awardCategories()->available()->where('type', 'vote')->each(function ($category) use ($service) {
             $service->consolidate($category);
             $category->update(['published' => true]);
         });
 
-        return $championship->awardCategories()->with('results')->get();
+        return $championship->awardCategories()->available()->with('results')->get();
     }
 
     public function endVoting(Championship $championship, ChampionshipAwardService $service, ChampionshipAuditService $audit)
@@ -420,7 +429,7 @@ class ChampionshipController extends Controller
         $closed = $service->endVoting($championship);
         $audit->record($championship->id, 'awards.voting.ended', null, ['categories_closed' => $closed]);
 
-        return $championship->awardCategories()->with('results.winner.player')->get();
+        return $championship->awardCategories()->available()->with('results.winner.player')->get();
     }
 
     private function advancePlayoff(ChampionshipMatch $match): void

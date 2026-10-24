@@ -151,7 +151,7 @@ class ChampionshipVoterController extends Controller
             ? DB::table('users')->where('player_id', $globalPlayerId)->select('id')
             : DB::table('users')->whereRaw('1 = 0')->select('id');
 
-        $categories = $championship->awardCategories()->orderBy('id')->get()->map(function (ChampionshipAwardCategory $category) use ($voter, $participantId, $legacyVoterIds) {
+        $categories = $championship->awardCategories()->available()->orderBy('id')->get()->map(function (ChampionshipAwardCategory $category) use ($voter, $participantId, $legacyVoterIds) {
             $hasVoted = $category->votes()->where(function ($query) use ($voter, $participantId, $legacyVoterIds) {
                 $query->where('championship_voter_id', $voter->id)
                     ->orWhere('voter_championship_player_id', $participantId)
@@ -193,7 +193,7 @@ class ChampionshipVoterController extends Controller
                 abort_if($voter->session_token_hash !== $tokenHash || ! $voter->session_expires_at?->isFuture(), 401, 'A sessão de votação expirou. Identifique-se novamente.');
 
                 $category = ChampionshipAwardCategory::query()->whereKey($category->id)->lockForUpdate()->firstOrFail();
-                abort_if($category->type !== 'vote' || $category->published || ! $category->voting_open, 422, 'Esta categoria não está recebendo votos.');
+                abort_if(! $category->isAvailable() || $category->type !== 'vote' || $category->published || ! $category->voting_open, 422, 'Esta categoria não está recebendo votos.');
 
                 $championship = Championship::query()->whereKey($category->championship_id)->lockForUpdate()->firstOrFail();
                 abort_if($championship->status !== 'finished', 422, 'A votação só será liberada após o encerramento do campeonato.');

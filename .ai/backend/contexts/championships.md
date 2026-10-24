@@ -1,113 +1,123 @@
-# Contexto: Campeonato
+# Contexto da API — Campeonato
 
-Este contexto pertence exclusivamente à API Laravel. A especificação detalhada das regras está em [`../regras-negocio-campeonato.md`](../regras-negocio-campeonato.md); este arquivo organiza a arquitetura, os contratos HTTP e os pontos que devem ser lidos antes de alterar o módulo.
+Atualizado em 2026-10-23 com base em routes, controllers, Services, Models, migrations e testes atuais. Regras de domínio detalhadas estão em [regras-negocio-campeonato.md](../regras-negocio-campeonato.md); impacto e achados estão na [matriz](../matriz-dependencias.md).
 
-## Objetivo
+## Objetivo e fronteiras
 
-O módulo administra campeonatos independentes das peladas tradicionais: cinco equipes, inscrições próprias de jogadores de linha e goleiros, formação por Pedra, turno único, playoffs, eventos de partidas, estatísticas, odds informativas, premiações, votação e auditoria.
+O módulo administra uma competição separada das peladas tradicionais: equipes e inscrições próprias, formação por Pedra, jogos, classificação, playoffs, estatísticas, odds e prêmios.
 
-## Arquivos envolvidos
+ChampionshipPlayer é uma inscrição ligada a Player global, com tipo e Pedra locais à competição. Jogos do campeonato não criam MatchPlayer. As estatísticas tradicionais e do campeonato têm fontes separadas.
 
-- `app/Http/Controllers/ChampionshipController.php` — leitura pública e operações administrativas do campeonato.
-- `app/Http/Controllers/ChampionshipVoterController.php` — cadastro, sessão, status e votos públicos por PIN.
-- `app/Http/Controllers/Admin/ChampionshipVoterController.php` — consulta e manutenção administrativa dos cadastros de votação.
-- `app/Models/Championship.php` — campeonato e relações com equipes, participantes, partidas, desempates, auditoria e premiações.
-- `app/Models/ChampionshipTeam.php` — equipes, brasões e participantes.
-- `app/Models/ChampionshipPlayer.php` — inscrição do jogador global no campeonato, com tipo e Pedra próprios.
-- `app/Models/ChampionshipMatch.php` — partidas, placares, pênaltis, eventos, participações e odds.
-- `app/Models/ChampionshipMatchEvent.php` — gols, assistências, equipe do evento, minuto e gol contra.
-- `app/Models/ChampionshipMatchParticipation.php` — participantes e MVP.
-- `app/Models/ChampionshipAwardCategory.php`, `ChampionshipAwardResult.php`, `ChampionshipVote.php`, `ChampionshipVoter.php` — premiações, resultados, votos e cadastro por PIN.
-- `app/Models/ChampionshipGoalkeeperDraw.php`, `ChampionshipTieBreaker.php`, `ChampionshipAuditLog.php` — histórico legado, desempates e auditoria.
-- `app/Services/ChampionshipFixtureService.php` — dez jogos de turno único em cinco rodadas.
-- `app/Services/ChampionshipValidationService.php` — validação da configuração antes do início.
-- `app/Services/ChampionshipStandingsService.php` — classificação e critérios de desempate.
-- `app/Services/ChampionshipPlayoffService.php` — congelamento da classificação e geração dos playoffs.
-- `app/Services/ChampionshipStatisticsService.php` — estatísticas por jogador e fase.
-- `app/Services/ChampionshipOddsService.php` — probabilidades e odds com modelo Poisson.
-- `app/Services/ChampionshipAwardService.php` — categorias, consolidação e publicação de premiações.
-- `database/migrations/2026_10_19_120000_create_championship_module_tables.php`
-- `database/migrations/2026_10_19_121000_create_championship_awards_and_user_player_link.php`
-- `tests/Feature/ChampionshipModuleTest.php`
+## Arquivos principais
+
+- app/Http/Controllers/ChampionshipController.php — leituras públicas e várias operações administrativas protegidas pela rota.
+- app/Http/Controllers/ChampionshipVoterController.php — cadastro, identificação, status e votos PIN.
+- app/Http/Controllers/Admin/ChampionshipVoterController.php — gestão administrativa de votantes.
+- app/Services/ChampionshipFixtureService.php — criação de confrontos.
+- app/Services/ChampionshipValidationService.php — validação do elenco para início/fixtures em draft.
+- app/Services/ChampionshipStandingsService.php — tabela e desempates.
+- app/Services/ChampionshipPlayoffService.php — snapshot e semifinais.
+- app/Services/ChampionshipStatisticsService.php — estatísticas derivadas dos jogos.
+- app/Services/ChampionshipOddsService.php — estimativas versionadas por partida.
+- app/Services/ChampionshipAwardService.php — seed de categorias, encerramento e consolidação.
+- app/Services/ChampionshipAuditService.php — log de operações selecionadas.
+- app/Models/Championship*.php — entidades específicas do módulo.
+- migrations 2026_10_19_* e 2026_10_21_000000_add_championship_voters.php; migration mais recente refina prêmios e versões de odds.
+- tests/Feature/ChampionshipModuleTest.php e tests/Feature/ChampionshipWorkflowTest.php.
+
+ChampionshipController é um desvio arquitetural existente: métodos de escrita ficam no controller raiz, mas todas as rotas administrativas estão dentro do grupo auth:sanctum + admin. Não confunda namespace com autorização efetiva.
 
 ## Rotas públicas
 
-| Método | Rota | Resultado |
-|---|---|---|
-| `GET` | `/championships` | Lista campeonatos |
-| `GET` | `/championships/{championship}` | Detalhes, classificação, equipes, partidas e campeão |
-| `GET` | `/championships/{championship}/awards` | Categorias, candidatos e resultados publicados |
-| `GET` | `/championships/{championship}/statistics` | Estatísticas individuais, com filtro opcional `phase` |
-| `GET` | `/championships/{championship}/rankings` | Rankings de gols, assistências, MVP e goleiros, com filtro opcional `phase` |
-| `POST` | `/championship-awards/{category}/votes` | Voto de participante autenticado |
-| `GET` | `/championships/{championship}/voting/players` | Lista pública de nomes inscritos para identificação |
-| `POST` | `/championships/{championship}/voting/voters` | Cadastro público por inscrição e PIN de seis dígitos |
-| `POST` | `/championships/{championship}/voting/session` | Identifica inscrição usando PIN e emite sessão de 12 horas |
-| `GET/DELETE` | `/championships/{championship}/voting/session` | Consulta status privado ou encerra sessão pelo cabeçalho `X-Championship-Voter-Session` |
-| `POST` | `/championship-votes/{category}` | Voto por sessão validada, sem aceitar ID do eleitor no corpo |
+Todas as rotas abaixo têm prefixo runtime /api.
 
-A votação exige `auth:sanctum`; as demais rotas acima são públicas.
+| Método e rota | Acesso / comportamento |
+|---|---|
+| GET /championships | Lista competições; atualmente sem paginação |
+| GET /championships/{championship} | Detalhes, tabela, times, partidas e campeão |
+| GET /championships/{championship}/awards | Categorias ativas, candidatos e resultados |
+| GET /championships/{championship}/statistics | Estatísticas, filtro opcional phase |
+| GET /championships/{championship}/rankings | Gols, assistências, MVP e goleiros; filtro opcional phase |
+| GET /championship-teams/{team}/crest | Entrega o arquivo público do brasão |
+| POST /championship-awards/{category}/votes | Voto legado; exige auth:sanctum e usuário ligado a jogador inscrito |
+| GET /championships/{championship}/voting/players | Lista inscrições para cadastro/identificação PIN |
+| POST /championships/{championship}/voting/voters | Cadastro PIN; throttle de rota |
+| POST /championships/{championship}/voting/session | Login PIN; throttle de rota e limite adicional por IP/competição |
+| GET/DELETE /championships/{championship}/voting/session | Status privado ou encerramento da sessão pelo cabeçalho X-Championship-Voter-Session |
+| POST /championship-votes/{category} | Voto PIN pelo cabeçalho X-Championship-Voter-Session; throttle de rota |
 
 ## Rotas administrativas
 
-Todas ficam no grupo `middleware(['auth:sanctum', 'admin'])->prefix('admin')`.
+Todas estão no grupo /api/admin com auth:sanctum e middleware admin.
 
-| Método | Rota | Responsabilidade |
-|---|---|---|
-| `POST` | `/admin/championships` | Cria campeonato, cinco equipes padrão e quinze categorias |
-| `POST` | `/admin/championships/{championship}/players` | Inscreve jogador global como linha ou goleiro |
-| `POST` | `/admin/championships/{championship}/assignments` | Forma as equipes com uma Pedra de cada grupo |
-| `POST` | `/admin/championships/{championship}/fixtures` | Gera os dez jogos da primeira fase |
-| `POST` | `/admin/championships/{championship}/start` | Valida configuração e inicia competição |
-| `PUT` | `/admin/championship-teams/{team}` | Edita nome da equipe |
-| `POST` | `/admin/championships/{championship}/standings/tie-breaker` | Registra sorteio de desempate |
-| `GET` | `/admin/championship-users` | Lista contas para vínculo com jogador |
-| `PUT` | `/admin/championship-users/{user}/player` | Vincula conta autenticada a jogador global |
-| `POST` | `/admin/championships/{championship}/playoffs` | Gera semifinais e congela classificação |
-| `POST/DELETE` | `/admin/championship-teams/{team}/crest` | Envia ou remove brasão |
-| `POST` | `/admin/championships/{championship}/awards/publish` | Consolida e publica premiações |
-| `PUT` | `/admin/championships/{championship}/awards/voting-state` | Encerra todas as votações do campeonato |
-| `GET` | `/admin/championships/{championship}/voters` | Lista votantes, vínculo e categorias votadas sem expor PIN/hash |
-| `PUT` | `/admin/championship-voters/{voter}/player` | Corrige vínculo no mesmo campeonato, registra auditoria e invalida sessão |
-| `PUT` | `/admin/championship-voters/{voter}/pin` | Redefine PIN, zera tentativas e invalida sessão |
-| `PUT` | `/admin/championship-matches/{match}` | Finaliza/cancela partida e registra pênaltis |
-| `POST` | `/admin/championship-matches/{match}/events` | Cria gol, assistência ou gol contra |
-| `PUT/DELETE` | `/admin/championship-events/{event}` | Altera/remove evento e recalcula placar |
-| `POST` | `/admin/championship-matches/{match}/participation` | Salva participantes e MVP |
-| `POST` | `/admin/championship-matches/{match}/odds` | Calcula e persiste odds informativas |
+| Método e rota | Operação |
+|---|---|
+| POST /championships | Cria competição, cinco equipes padrão e 13 categorias ativas |
+| POST /championships/{championship}/players | Inscreve jogador global como linha ou goleiro |
+| POST /championships/{championship}/assignments | Atribui jogadores de linha às equipes |
+| POST /championships/{championship}/fixtures | Gera jogos de grupo |
+| POST /championships/{championship}/odds | Calcula odds para jogos agendados da competição |
+| POST /championships/{championship}/start | Valida o elenco e inicia fase de grupos |
+| PUT /championship-teams/{team} | Altera nome de equipe, apenas em draft |
+| POST /championships/{championship}/standings/tie-breaker | Registra decisão administrativa de desempate |
+| GET /championship-users | Lista contas e vínculos globais para o voto legado |
+| PUT /championship-users/{user}/player | Altera vínculo legado User/Player |
+| GET /championships/{championship}/voters | Lista votantes, inscrição e categorias votadas |
+| PUT /championship-voters/{voter}/player | Corrige vínculo PIN no mesmo campeonato |
+| PUT /championship-voters/{voter}/pin | Redefine PIN e invalida sessão |
+| POST /championships/{championship}/playoffs | Gera semifinais depois dos dez jogos de grupo finalizados |
+| POST/DELETE /championship-teams/{team}/crest | Envia ou remove brasão |
+| PUT /championships/{championship}/awards/voting-state | Encerra votações abertas do campeonato |
+| POST /championships/{championship}/awards/publish | Consolida e publica resultados |
+| PUT /championship-matches/{match} | Marca jogo finished ou cancelled e informa placar/pênaltis |
+| POST /championship-matches/{match}/events | Registra evento de gol |
+| PUT/DELETE /championship-events/{event} | Atualiza minuto/own_goal ou remove evento; recalcula placar |
+| POST /championship-matches/{match}/participation | Substitui lista de participantes e MVP |
+| POST /championship-matches/{match}/odds | Calcula nova versão de odds de uma partida |
 
-## Regras invariáveis
+Não foi encontrada rota para sorteio de goleiros. O cadastro da inscrição de goleiro recebe team_id e vincula esse goleiro diretamente à equipe. championship_goalkeeper_draws permanece no schema/modelo, sem uso de rota ou Service no fluxo atual.
 
-- Cada campeonato possui cinco equipes, 25 jogadores de linha e cinco goleiros.
-- Cada equipe recebe cinco jogadores de linha, um de cada Pedra, e um goleiro.
-- Inscrições, classificações e vínculos pertencem ao campeonato; o cadastro global de jogadores não é duplicado nem alterado.
-- Um jogador não pode ser inscrito duas vezes, nem pertencer a duas equipes.
-- A fase de grupos tem dez partidas, cinco rodadas e pontuação 3/1/0.
-- O desempate segue pontos, vitórias, saldo, gols marcados, confronto direto e decisão administrativa persistida.
-- Os playoffs são `2º x 5º`, `3º x 4º`, Final dos Desafiantes e Grande Final; a classificação é congelada ao gerar os playoffs.
-- Empate em eliminatória exige pênaltis. Pênaltis não entram na artilharia.
-- Eventos só podem usar participantes da partida; assistência deve ser de companheiro e não pode ser o próprio autor.
-- Gol contra beneficia a equipe adversária e não conta como gol do autor.
-- Estatísticas consideram apenas partidas finalizadas e válidas.
-- Odds são informativas, calculadas por Poisson e persistidas com os parâmetros do cálculo; não há apostas financeiras.
-- Existem quinze premiações. Artilheiro e Garçom são automáticos; as outras categorias usam votação.
-- Voto fica disponível até o encerramento global pelo administrador. A rota legada exige conta autenticada vinculada a jogador inscrito; o fluxo simples usa sessão por PIN. Ambos permitem um voto por inscrição/categoria e impedem auto-voto.
-- O cadastro simplificado associa no máximo um votante a cada inscrição por campeonato; PIN é armazenado com hash, a sessão de 12 horas guarda token apenas em hash e cinco erros bloqueiam por 15 minutos.
-- A unicidade por categoria é garantida pelos índices da tabela de votos para o cadastro simplificado e para a inscrição votante, além da validação transacional do backend. Votos anteriores permanecem ligados ao cadastro de votante mesmo após correção administrativa de jogador.
-- Administração de cadastros exige `auth:sanctum` e `admin`; a mudança registra IDs anteriores/novos, administrador e timestamp no log de auditoria. Redefinição de PIN nunca registra o valor ou hash em auditoria.
+## Setup, inscrição e início
 
-## Respostas e serialização
+1. store cria cinco equipes padrão e semeia 13 categorias ativas. As categorias Resenha do Campeonato e Inimigo do Gol ficam inativas por migration em competições antigas para preservar dados; novos registros não são semeados.
+2. Inscrição é permitida em draft. O jogador global precisa existir e ter posição compatível. Há limite de 25 jogadores de linha e cinco goleiros. A inscrição de linha tem Pedra/grupo e classificação decimal; um goleiro precisa de team_id válido sem goleiro já vinculado.
+3. assignPlayers usa exatamente as cinco equipes da competição. Para cada equipe recebe cinco inscrições de linha, uma por Pedra, sem duplicação ou inscrição externa. A troca dos vínculos de linha é transacional; a validação falha reverte a alteração.
+4. validateReady exige cinco equipes, 25 inscrições de linha, cinco de goleiro, cinco linhas de Pedras distintas e um goleiro por equipe.
+5. start muda status para active e phase para group, registra auditoria e não exige fixtures preexistentes.
+6. generateFixtures pode ocorrer em draft (com validateReady) ou active/group. Com cinco equipes, cria dez confrontos em cinco rodadas. Se já existir jogo de grupo, a chamada retorna sem gerar de novo.
 
-- Controllers de leitura retornam JSON direto; o frontend aceita também envelopes `{ data: ... }` por compatibilidade geral.
-- Relacionamentos Eloquent são serializados em `snake_case`, como `home_team`, `away_team` e `championship_player`.
-- `GET /championships/{championship}` retorna `championship`, `standings`, `matches` e `champion`.
-- `GET /championships/{championship}/rankings` retorna `scorers`, `assists`, `mvp` e `goalkeepers`.
-- `GET /championships/{championship}/statistics` retorna linhas com jogador, posição, jogos, resultados, gols, assistências, participações, MVP e métricas de goleiro.
+## Partidas, tabela e playoffs
 
-## Auditoria, testes e cuidados
+- Estados persistidos de partida: scheduled, in_progress, finished, cancelled. O endpoint de atualização recebe apenas finished ou cancelled.
+- Participantes são inscrições de equipes da partida. O MVP deve estar na lista. A gravação substitui as linhas de participação.
+- Evento exige equipe participante do jogo. Autor, se informado, e assistente precisam estar na lista de participantes e pertencer à equipe associada. Assistente não pode ser o autor. Gol contra beneficia a equipe adversária.
+- Criar, editar ou apagar evento recalcula placar a partir dos eventos. A edição de evento só permite alterar minuto e indicação own_goal.
+- Apenas partidas finished de grupo entram na classificação. Vitória vale 3, empate 1, derrota 0. Desempates: pontos, vitórias, saldo, gols pró, confronto direto, decisão administrativa persistida e, por fim, id de equipe.
+- Playoffs exigem dez partidas de grupo finalizadas. O serviço guarda standings_snapshot e cria 2º×5º e 3º×4º. Os vencedores criam a Final dos Desafiantes; o vencedor enfrenta o 1º colocado na Grande Final.
+- Empate em fase eliminatória exige placares de pênaltis diferentes. Pênaltis não entram em gols de jogador. Final finalizada define qualified_team_id e status/phase finished.
+- Após snapshot, ChampionshipStandingsService retorna a tabela salva em vez de recalcular. updateMatch não invalida esse snapshot automaticamente; correções de resultados após playoffs podem divergir da classificação congelada. Ver achado A3 na matriz.
+- updateMatch não impede alteração de partida previamente finalizada/cancelada. Definir política para isso é recomendação, não validação existente.
 
-- Início, alterações de equipe, brasões e desempates devem continuar auditáveis.
-- Não editar `deploy.sh`, `docker-compose.prod.yml`, `nginx/production.conf` ou segredos para alterar este módulo.
-- Não executar migrations que alterem dados sem autorização explícita.
-- O teste base do módulo está em `tests/Feature/ChampionshipModuleTest.php`; alterações em regras de fixture, classificação, odds, inscrição, votação ou eventos devem incluir cobertura correspondente.
-- Antes de alterar regra de negócio, comparar o código com `regras-negocio-campeonato.md` e confirmar o impacto nos contratos consumidos pelo frontend.
+## Odds e estatísticas
+
+- calculateOdds aceita uma partida scheduled. calculateChampionshipOdds percorre partidas scheduled; ambas acumulam calculation_version e nunca sobrescrevem as anteriores.
+- O modelo usa dados de resultados finalizados, força de elenco (Pedra e forma), defesa/gols, parâmetros de suavização e Poisson truncado. Sem histórico usa média inicial e marca preliminary como verdadeiro; não há vantagem de mando.
+- Parâmetros persistidos incluem amostra, lambdas, fórmulas auxiliares e assinaturas de resultados/escalação. A tela pode sinalizar estimativa antiga. Detalhe metodológico em [championship-odds-and-awards.md](../../../docs/championship-odds-and-awards.md).
+- Rankings e estatísticas usam somente jogos finalizados e podem filtrar phase. Categorias estatísticas Garçom/Artilheiro leem assistências e gols válidos.
+
+## Votação e publicação
+
+- Categorias ativas de votação começam abertas. Votos só são aceitos após status finished e antes de a votação ser encerrada/publicada.
+- PIN tem seis dígitos, é salvo com hash. Cinco erros consecutivos bloqueiam o cadastro por 15 minutos; token de sessão aleatório tem validade de 12 horas e só seu hash é persistido.
+- O cadastro público identifica uma inscrição por nome e PIN, mas não valida identidade externa.
+- PIN e voto legado Sanctum compartilham a prevenção de duplicidade pela inscrição/categoria. Candidato precisa pertencer ao mesmo campeonato; auto-voto é proibido; Paredão aceita goalkeeper e Xerifão exige posição defensiva elegível.
+- Administrador pode listar inscrições/categorias votadas, trocar inscrição do cadastro dentro da competição e redefinir PIN. Troca/reset invalida sessão, registra auditoria e não transfere votos existentes.
+- Encerrar votação fecha as categorias ativas do tipo vote. Publicar exige campeonato finished e nenhuma categoria de voto ainda aberta. Garçom/Artilheiro são calculados das estatísticas; categorias de voto são consolidadas por candidato.
+
+## Respostas, limites e testes
+
+- Relacionamentos Eloquent saem em snake_case, como home_team, away_team e championship_player. Os Services Vue aceitam envelopes diferentes; consulte app-red-devils/src/services/championshipService.ts antes de ajustar contrato.
+- A lista de campeonatos, categorias, estatísticas e rankings não usa paginator Laravel neste controller.
+- A remoção do participante de uma partida não checa se ele permanece referenciado como autor/assistente em eventos já cadastrados. Ver achado A4.
+- Soft delete de Player não é impedido por inscrição de campeonato; a relação Player pode ficar oculta em leituras. Ver achado A5.
+- Testes existentes do domínio: ChampionshipModuleTest.php e ChampionshipWorkflowTest.php. Não foram executados nesta auditoria documental.

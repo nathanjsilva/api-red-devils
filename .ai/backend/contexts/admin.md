@@ -1,28 +1,45 @@
-# Context: Permissões / Área Administrativa
+﻿# Contexto — Permissões e área administrativa
 
-## Arquivos envolvidos
+## Como a proteção funciona
 
-- `app/Http/Middleware/AdminMiddleware.php`
-- `app/Models/User.php` (`isAdmin()`)
-- `bootstrap/app.php` (registro do middleware `admin`)
-- `routes/api.php` (grupo `Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')`)
-- `database/seeders/AdminUserSeeder.php`
-- Todos os controllers em `app/Http/Controllers/Admin/` (`PlayerController`, `PeladaController`, `MatchPlayerController`, `TeamController`) — cada rota desse namespace já está, por convenção, dentro do grupo `admin` (ver [feature-index.md](../../feature-index.md))
+- bootstrap/app.php registra o alias admin para AdminMiddleware.
+- routes/api.php coloca as operações administrativas sob middleware auth:sanctum e depois admin.
+- Sanctum identifica User pelo bearer token. AdminMiddleware chama User::isAdmin(), que verifica profile === admin.
+- Falta de token resulta em 401 pelo fluxo de autenticação; usuário autenticado sem profile admin resulta em 403.
+- Não há Policies/Gates ou níveis granulares de autorização confirmados.
+- GET /admin/me e POST /admin/logout também ficam dentro do grupo admin.
+- As rotas de cadastro/voto por PIN não usam Sanctum. O voto legado usa auth:sanctum, mas não exige o middleware admin adicional.
 
-## Como funciona
+## Controllers administrativos
 
-- `AdminMiddleware::handle()` verifica `$request->user()` (resolvido pelo `auth:sanctum` que roda antes no mesmo grupo), confirma que é instância de `App\Models\User` e que `isAdmin()` (`profile === 'admin'`) é verdadeiro. Caso contrário, `403` com `{"message": "Acesso negado. Apenas administradores podem acessar esta funcionalidade."}`.
-- Não existe granularidade de permissão além de admin/não-admin — é binário.
-- `logout`/`me` continuam dentro do grupo `admin` **de propósito** (não foi alterado no refactor de arquitetura) — hoje só existe usuário admin no sistema, então não há regressão prática, mas é uma limitação conhecida: se um usuário autenticado não-admin existir no futuro, ele não vai conseguir deslogar nem ver o próprio perfil via API sem também ser admin.
+Os controllers comuns de escrita ficam em app/Http/Controllers/Admin:
 
-## Como o primeiro admin é criado
+- PlayerController — jogadores.
+- PeladaController — peladas.
+- MatchPlayerController — estatísticas por jogador/pelada.
+- TeamController — organização de times.
+- ChampionshipVoterController — gestão dos cadastros de votação PIN.
 
-- Via `database/seeders/AdminUserSeeder.php` (`php artisan db:seed`), não via endpoint HTTP. O `README.md` menciona uma rota `POST /api/setup-first-admin` que **não existe no código atual** — não implemente com base nessa suposição sem confirmar com o usuário se é para criar do zero.
-- **Atenção**: o seeder cria/atualiza um usuário com credenciais fixas hardcoded no arquivo (`username: ADMIN`). Isso é uma limitação de segurança conhecida e **deliberadamente não alterada** neste refactor (fora de escopo) — não trate como resolvida, e não mexa nela sem pedido explícito do usuário.
-- Da mesma forma, tokens Sanctum não têm expiração configurada (`config/sanctum.php` → `expiration => null`) — também fora de escopo do refactor atual, permanece como ponto de atenção para o futuro.
+Exceção existente: ChampionshipController fica em app/Http/Controllers e implementa algumas leituras públicas e operações administrativas. As operações de escrita desse controller continuam no grupo protegido de routes/api.php. Não determine autorização apenas pelo namespace.
 
-## Ao alterar
+## Criação de usuário admin e riscos conhecidos
 
-- Se o usuário pedir "permitir que jogadores comuns façam algo sem ser admin", isso exige: (1) decidir se a entidade autenticada continua sendo só `User`, (2) criar um nível de acesso intermediário (ex.: novo valor de `profile`, ou checar `auth:sanctum` sem `admin` em rotas específicas), e (3) mover essas rotas para fora do grupo `admin` em `routes/api.php`, tirando `logout`/`me` do meio do caminho. É uma mudança estrutural — explique o plano e peça confirmação antes de tocar em `routes/api.php` e no middleware.
-- Não remova o middleware `admin` de nenhuma rota do grupo sem autorização explícita — são endpoints de escrita/gestão sensíveis.
-- Toda nova rota de escrita/gestão deve ter seu controller criado em `app/Http/Controllers/Admin/` e registrada dentro do grupo `admin` — não crie controllers de escrita fora desse namespace (ver [backend/architecture.md](../architecture.md)).
+O primeiro usuário é criado pelo AdminUserSeeder chamado por DatabaseSeeder; não há endpoint de setup público confirmado. O seeder usa valores de bootstrap fixos no código e updateOrCreate pode restaurar esses valores quando ele roda. Não copie credenciais para documentação ou logs. Executar o seeder em ambiente acessível pode expor a conta administrativa.
+
+As migrations iniciais definem profile como enum com admin. Não foi verificada a estrutura do banco de produção.
+
+O Sanctum está configurado sem expiração temporal de token. São pontos de segurança observados, não corrigidos nesta auditoria. O renderer de exceções da API também inclui a mensagem original de exceções 5xx no campo error. Ver A1 e A2 em ../matriz-dependencias.md.
+
+## Fluxo de sessão no frontend
+
+O service Axios lê token Sanctum no localStorage e envia Authorization. O router Vue verifica requiresAuth/requiresAdmin usando dados locais; isso melhora navegação, mas o backend continua sendo a autoridade de autorização.
+
+A sessão PIN do campeonato é separada: token aleatório é mantido no sessionStorage do navegador e enviado em X-Championship-Voter-Session. Ela não concede acesso às rotas admin.
+
+## Antes de alterar permissões
+
+1. Inspecione a rota em routes/api.php e os dois middlewares em ordem.
+2. Confira User, migrations de users e frontend router/types. O backend atualmente só confirma profile admin no schema de migrations.
+3. Mudança de acesso afeta autorização, contrato de erro, interceptor Axios e navegação.
+4. Preserve rotas de escrita sob auth:sanctum + admin, salvo mudança explicitamente autorizada e revisada de ponta a ponta.
+5. Para nova operação administrativa, use controller Admin namespace como convenção; trate ChampionshipController como exceção existente, não como padrão.

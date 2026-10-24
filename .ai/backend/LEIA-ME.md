@@ -1,18 +1,45 @@
-# .ai/backend/LEIA-ME.md — Regras Obrigatórias do Backend
+# LEIA-ME — Regras de trabalho no backend
 
-Leia isto sempre antes de alterar qualquer coisa dentro de `app/`, `routes/`, `database/`, `config/`, `bootstrap/`.
+Leia este documento antes de alterar app/, routes/, database/, config/ ou bootstrap/. A prioridade é a solicitação explícita atual, seguida pelas regras gerais em ../ai-rules.md, contextos e implementação existente.
 
-## Regras específicas
+## Arquitetura confirmada
 
-1. **Toda rota nova** deve ser adicionada em `routes/api.php`, dentro do grupo correto (`Route::middleware(['auth:sanctum','admin'])->prefix('admin')` para rotas administrativas, fora dele para rotas públicas). Nunca crie rotas admin sem o middleware `admin`.
-2. **Controller de escrita/gestão (admin) sempre em `app/Http/Controllers/Admin/`** (namespace `App\Http\Controllers\Admin`); controller de leitura pública sempre no namespace raiz. Não volte a concentrar múltiplos domínios num único controller "genérico" — cada controller trata de um recurso.
-3. **Validação sempre via Form Request** (`app/Http/Requests/`), seguindo o padrão existente (`Store*Request`, `Update*Request`), com métodos `rules()` e `messages()` em português.
-4. **Resposta sempre via Resource** (`app/Http/Resources/`) quando o retorno for um model ou coleção de models já existente com Resource. Não monte arrays manuais de model quando um Resource equivalente já existe.
-5. **Erros de recurso não encontrado**: usar `$this->errorResponse('mensagem', codigo)` (definido em `Controller.php`), não `abort()` nem exceptions genéricas, para manter o formato de resposta consistente (`{ "message": ..., "error": ... }`). Para erros de regra de negócio mais complexos que precisam de exception própria, siga o padrão de `InsufficientGoalkeepersException` (exception "renderable", com seu próprio `render()`) — veja [architecture.md](architecture.md).
-6. **Use a camada de `app/Services/` para lógica de negócio compartilhada, multi-passo ou transacional** (ex.: `TeamOrganizerService`, `StatisticsService`). Para CRUD simples de um único registro, o controller pode falar direto com o Model — não crie um Service para isso. Não introduza uma camada adicional (Repositories, UseCases, DDD completo) sem que o usuário peça explicitamente; a camada de Services já existente é o nível de abstração-alvo deste projeto.
-7. **Listagens devem ser paginadas.** Use o helper `$this->perPage($request)` (definido em `Controller.php`) e `Model::paginate($perPage)` / `$query->paginate($perPage)`. Não volte a retornar `->get()` sem paginação em endpoints de listagem.
-8. **`Player` e `Pelada` usam soft delete** (`SoftDeletes`). Nunca use `forceDelete()` nesses models a partir de um controller/rota sem autorização explícita — o soft delete existe justamente para preservar o histórico de `match_players`/`teams` ao "apagar" um jogador ou uma pelada.
-9. **`MatchPlayer.result` é obrigatório e é o único campo de resultado** (`is_winner` foi removido da tabela). Nunca reintroduza um campo boolean paralelo de vitória — se precisar expor um booleano de conveniência na resposta, derive-o do `result` no Resource, como já é feito em `MatchPlayerResource`.
-10. **Migrations**: nunca rode `migrate:fresh`, `migrate:rollback`, ou edite migrations já aplicadas em produção. Alterações de coluna em MySQL neste projeto usam `DB::statement()` com SQL bruto (não `Schema::table()->change()`, que exigiria `doctrine/dbal`) — siga esse padrão em novas migrations que alterem colunas existentes.
-11. **Mensagens de erro e de validação em português**, seguindo o tom já usado em todo o projeto (ex.: "Jogador não encontrado.").
-12. Antes de mexer numa funcionalidade específica, leia o context correspondente em `.ai/backend/contexts/` (veja [feature-index.md](../feature-index.md)).
+- API Laravel 11 em api-red-devils; o frontend é o repositório app-red-devils e consome HTTP.
+- Rotas da API estão em routes/api.php e recebem o prefixo /api pelo bootstrap.
+- Escritas e gestão ficam no grupo auth:sanctum + admin. Leitura pública permanece fora dele.
+- O fluxo típico usa Controller, Service quando a lógica é multi-etapa/compartilhada/transacional e Eloquent.
+- Não há Repository, Policy ou Gate confirmado.
+
+## Convenções para código novo
+
+1. Adicione rotas conforme o nível de acesso correto; nunca crie escrita administrativa fora do grupo protegido.
+2. Use controllers em App\Http\Controllers\Admin para novas operações de escrita/admin. ChampionshipController é uma exceção legada: suas escritas já são protegidas no grupo admin.
+3. Prefira Form Request para validações reutilizáveis ou extensas. Parte do Auth e do Campeonato usa validação inline; não trate essa exceção como obrigação para módulos novos.
+4. Use JsonResource para models/coleções que já têm Resource correspondente. O Campeonato retorna JSON direto em vários métodos; confirme o contrato antes de mudar.
+5. Para operações simples, controller pode acessar Model diretamente. Use Service para regra multi-etapa, compartilhada, agregada ou transacional.
+6. Use paginação em novas listagens públicas/admin. Algumas coleções existentes, como campeonatos, categorias e rankings do campeonato, não são paginadas.
+7. Mensagens visíveis e de validação devem estar em português.
+8. Use transação para gravar vários registros que precisam permanecer consistentes.
+9. Player e Pelada usam SoftDeletes. Não use forceDelete sem autorização explícita; considere também o efeito de ocultar relações e estatísticas em consultas comuns.
+10. MatchPlayer.result é obrigatório e é a única fonte de resultado. is_winner existe só como campo derivado em MatchPlayerResource.
+11. Não execute migrations que alterem dados nem comandos destrutivos no banco sem autorização. Nunca use migrate:fresh, rollback ou dados de produção para testes.
+12. Leia o context listado em ../feature-index.md e a matriz de matriz-dependencias.md antes de mudar regra ou persistência.
+
+## Formatos de resposta e erros
+
+Controller::errorResponse e Controller::perPage são helpers disponíveis. Exceções da API são transformadas em JSON em bootstrap/app.php. Alguns endpoints retornam Resource/paginator, outros arrays ou modelos diretos.
+
+O renderer atual inclui mensagem de exceção no campo error mesmo para 5xx. Consulte o achado A1 em matriz-dependencias.md; não divulgue mensagens internas em novos logs, respostas de erro ou documentação.
+
+## Migrations
+
+- Preserve migrations já aplicadas; use nova migration aditiva para evolução de schema.
+- Migrations do projeto usam MySQL e há operações ALTER TABLE com sintaxe MySQL. SQLite não é compatível com todas as migrations existentes.
+- Verifique índices e FKs, mas não presuma que o banco impõe relações compostas de mesmo campeonato; parte da integridade está nas validações do controller/service.
+- Não registre tokens, PINs, hashes ou credenciais em texto em documentação.
+
+## Verificações de alteração
+
+Antes de concluir mudança de API, compare rota, validação, autorização, controller, Service, Model, migration, serialização, frontend consumidor e testes correspondentes. Atualize o context afetado e a matriz quando regra, contrato ou efeito colateral mudar.
+
+A suíte Feature existe em tests/Feature. Não foi executada durante a auditoria documental; infraestrutura de teste está configurada para MySQL em phpunit.xml.

@@ -16,15 +16,23 @@ Para qualquer alteração numa área abaixo, leia o context correspondente em `.
 | Campeonato | `GET /championships[/{id}]`, `/awards`, `/statistics`, `/rankings`, votação pública por PIN, voto legado em `/championship-awards/{category}/votes` e operações administrativas em `/admin` | `ChampionshipController`, `ChampionshipVoterController`, `Admin\ChampionshipVoterController` | `ChampionshipFixtureService`, `ChampionshipValidationService`, `ChampionshipStandingsService`, `ChampionshipPlayoffService`, `ChampionshipStatisticsService`, `ChampionshipOddsService`, `ChampionshipAwardService`, `ChampionshipAuditService` | [backend/contexts/championships.md](backend/contexts/championships.md) |
 | Middleware/Permissões admin | grupo `middleware(['auth:sanctum','admin'])->prefix('admin')` | `AdminMiddleware` | — | [backend/contexts/admin.md](backend/contexts/admin.md) |
 
-## Namespace `Admin\*`
+## Namespaces e autorização admin
 
-Todos os controllers que exigem permissão de administrador vivem em `app/Http/Controllers/Admin/` (namespace `App\Http\Controllers\Admin`). Controllers no namespace raiz (`App\Http\Controllers`) são sempre de leitura pública. Ao criar uma nova funcionalidade de escrita, siga esse padrão: controller em `Admin\`, rota dentro do grupo `middleware(['auth:sanctum','admin'])->prefix('admin')`.
+A maioria das escritas de CRUD fica em app/Http/Controllers/Admin e precisa estar no grupo auth:sanctum + admin. Exceção atual: ChampionshipController, no namespace raiz, reúne leituras públicas e escritas administrativas; suas rotas de escrita continuam protegidas pelo grupo em routes/api.php. Não infira acesso pelo namespace: confira a rota.
 
-## Camada de Services (`app/Services/`)
+## Camada de Services (app/Services/)
 
-Regras de negócio que envolvem múltiplos passos, transação de banco, ou são compartilhadas por mais de um controller vivem em `app/Services/`:
+Regras compartilhadas, cálculos e operações transacionais ficam em Services; CRUD simples pode usar Eloquent no Controller.
 
-- **`TeamOrganizerService`** — organização manual e automática de times (usada por `Admin\TeamController`). Concentra a lógica transacional e a distribuição de goleiros/jogadores de linha, garantindo que os dois fluxos (manual e automático) fiquem consistentes entre si.
-- **`StatisticsService`** — todo o cálculo de rankings e estatísticas (usado por `StatisticsController`).
+- TeamOrganizerService — organização manual/automática de times de pelada e posições de goleiro.
+- StatisticsService — agregações, rankings e cache das estatísticas tradicionais.
+- ChampionshipValidationService — valida elenco para início e geração de fixtures em draft.
+- ChampionshipFixtureService — fixtures da fase de grupos.
+- ChampionshipStandingsService — classificação e critérios de desempate.
+- ChampionshipPlayoffService — snapshot e criação de playoffs.
+- ChampionshipStatisticsService — agregados do módulo campeonato.
+- ChampionshipOddsService — cálculo e versionamento de odds.
+- ChampionshipAwardService — categorias e consolidação de resultados.
+- ChampionshipAuditService — log de operações administrativas selecionadas.
 
-Controllers não devem reimplementar lógica que já exista num Service — veja [backend/architecture.md](backend/architecture.md).
+ChampionshipController reúne operações públicas e administrativas; autorização vem da rota. Confira [architecture.md](backend/architecture.md) e o context do campeonato antes de alterar esses Services.

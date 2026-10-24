@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Models\Championship;
 use App\Models\ChampionshipAwardCategory;
 use App\Models\ChampionshipMatch;
+use App\Models\ChampionshipMatchEvent;
+use App\Models\ChampionshipMatchParticipation;
+use App\Models\ChampionshipOdds;
 use App\Models\ChampionshipPlayer;
 use App\Models\ChampionshipTeam;
 use App\Models\ChampionshipVote;
@@ -13,8 +16,10 @@ use App\Models\Player;
 use App\Models\User;
 use App\Services\ChampionshipAwardService;
 use App\Services\ChampionshipFixtureService;
+use App\Services\ChampionshipOddsService;
 use App\Services\ChampionshipPlayoffService;
 use App\Services\ChampionshipStandingsService;
+use App\Services\ChampionshipValidationService;
 use App\Support\ChampionshipE2EEnvironment;
 use Database\Seeders\ChampionshipE2ECleanup;
 use Database\Seeders\ChampionshipE2ESeeder;
@@ -27,7 +32,7 @@ class ChampionshipWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_creation_sets_up_five_teams_and_fifteen_awards(): void
+    public function test_creation_keeps_thirteen_available_awards_and_archives_two(): void
     {
         $response = $this->actingAs($this->admin(), 'sanctum')->postJson('/api/admin/championships', [
             'name' => 'Campeonato de Teste',
@@ -36,7 +41,9 @@ class ChampionshipWorkflowTest extends TestCase
         $response->assertCreated();
         $championshipId = $response->json('id');
         $this->assertSame(5, Championship::findOrFail($championshipId)->teams()->count());
-        $this->assertSame(15, ChampionshipAwardCategory::where('championship_id', $championshipId)->count());
+        $this->assertSame(13, ChampionshipAwardCategory::where('championship_id', $championshipId)->count());
+        $this->assertSame(13, ChampionshipAwardCategory::where('championship_id', $championshipId)->available()->count());
+        $this->assertSame(0, ChampionshipAwardCategory::where('championship_id', $championshipId)->where('is_active', false)->count());
         $this->assertSame(13, ChampionshipAwardCategory::where('championship_id', $championshipId)->where('type', 'vote')->where('voting_open', true)->count());
         $this->assertSame(2, ChampionshipAwardCategory::where('championship_id', $championshipId)->where('type', 'statistic')->count());
     }
@@ -278,8 +285,8 @@ class ChampionshipWorkflowTest extends TestCase
         $this->postJson("/api/admin/championships/{$championship->id}/start")->assertOk();
         $service = app(ChampionshipFixtureService::class);
 
-        $service->generate($championship->fresh());
-        $service->generate($championship->fresh());
+        $service->generate($championship->fresh(), app(ChampionshipValidationService::class));
+        $service->generate($championship->fresh(), app(ChampionshipValidationService::class));
 
         $matches = $championship->matches()->where('phase', 'group')->get();
         $pairs = $matches->map(fn (ChampionshipMatch $match) => min($match->home_team_id, $match->away_team_id).'-'.max($match->home_team_id, $match->away_team_id));
@@ -288,6 +295,97 @@ class ChampionshipWorkflowTest extends TestCase
         $this->assertSame([2, 2, 2, 2, 2], $matches->groupBy('round')->map->count()->sortKeys()->values()->all());
         $this->assertSame(5, $matches->pluck('round')->unique()->count());
         $this->assertSame('active', $championship->fresh()->status);
+    }
+
+    public function test_admin_can_generate_and_recalculate_odds_before_start_without_changing_closed_match_history(): void
+    {
+        [$championship, $teams] = $this->makeChampionship();
+        $roster = $this->createCompleteRoster($championship, $teams);
+        $admin = $this->admin();
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/admin/championships/{$championship->id}/assignments", ['assignments' => $roster['assignments']])
+            ->assertOk();
+
+        $this->postJson("/api/admin/championships/{$championship->id}/fixtures")->assertOk();
+        $this->assertSame('draft', $championship->fresh()->status);
+        $this->assertSame(10, $championship->matches()->count());
+
+        $this->postJson("/api/admin/championships/{$championship->id}/odds")
+            ->assertOk()
+            ->assertJsonPath('calculated_matches', 10);
+
+        $matches = $championship->matches()->orderBy('id')->get();
+        $firstOdds = $matches[0]->fresh('odds')->odds;
+        $this->assertSame(1, $firstOdds->calculation_version);
+        $this->assertEqualsWithDelta(1.0, (float) $firstOdds->home_probability + (float) $firstOdds->draw_probability + (float) $firstOdds->away_probability, 0.00001);
+        $this->assertEqualsWithDelta(1 / (float) $firstOdds->home_probability, (float) $firstOdds->home_odd, 0.001);
+        $this->assertEqualsWithDelta(1 / (float) $firstOdds->draw_probability, (float) $firstOdds->draw_odd, 0.001);
+        $this->assertEqualsWithDelta(1 / (float) $firstOdds->away_probability, (float) $firstOdds->away_odd, 0.001);
+        $this->assertTrue($firstOdds->parameters['preliminary']);
+        $this->assertSame(0, $firstOdds->parameters['sample_matches']['league']);
+        $this->assertSame(0, $firstOdds->parameters['sample_matches']['home_team']);
+
+        $futureMatch = $matches->first(fn (ChampionshipMatch $match) => $match->id !== $matches[0]->id && $match->home_team_id === $matches[0]->home_team_id);
+        $this->assertNotNull($futureMatch);
+        $matches[0]->update(['status' => 'finished', 'home_score' => 2, 'away_score' => 0]);
+        $matches[1]->update(['status' => 'cancelled']);
+        $homeTeam = $championship->teams()->findOrFail($matches[0]->home_team_id);
+        $homeField = $homeTeam->players()->where('player_type', 'field')->firstOrFail();
+        $homeGoalkeeper = $homeTeam->players()->where('player_type', 'goalkeeper')->firstOrFail();
+        ChampionshipMatchParticipation::create(['match_id' => $matches[0]->id, 'championship_player_id' => $homeField->id, 'mvp' => true]);
+        ChampionshipMatchParticipation::create(['match_id' => $matches[0]->id, 'championship_player_id' => $homeGoalkeeper->id, 'mvp' => false]);
+        ChampionshipMatchEvent::create(['match_id' => $matches[0]->id, 'scorer_id' => $homeField->id, 'team_id' => $matches[0]->home_team_id, 'own_goal' => false]);
+        $finishedProbability = $firstOdds->home_probability;
+        $cancelledOddsId = $matches[1]->odds()->value('id');
+
+        $this->postJson("/api/admin/championships/{$championship->id}/odds")
+            ->assertOk()
+            ->assertJsonPath('calculated_matches', 8);
+
+        $this->assertSame(1, ChampionshipOdds::where('match_id', $matches[0]->id)->count());
+        $this->assertSame($finishedProbability, $matches[0]->fresh('odds')->odds->home_probability);
+        $this->assertSame($cancelledOddsId, $matches[1]->fresh('odds')->odds->id);
+        $this->assertSame(1, ChampionshipOdds::where('match_id', $matches[1]->id)->count());
+        $this->assertSame(2, $futureMatch->fresh('odds')->odds->calculation_version);
+        $this->assertSame(1, $futureMatch->fresh('odds')->odds->parameters['sample_matches']['league']);
+        $this->assertSame(1, $futureMatch->fresh('odds')->odds->parameters['sample_matches']['home_field_players']);
+        $this->assertSame(1, $futureMatch->fresh('odds')->odds->parameters['sample_matches']['home_goalkeepers']);
+        $this->assertSame('draft', $championship->fresh()->status);
+    }
+
+    public function test_removed_award_categories_are_hidden_while_existing_votes_remain(): void
+    {
+        [$championship] = $this->makeChampionship();
+        app(ChampionshipAwardService::class)->seed($championship);
+        $candidate = $this->createFieldParticipant($championship, 1, '1.1');
+        $voter = User::factory()->create();
+
+        foreach (['Resenha do Campeonato', 'Inimigo do Gol'] as $name) {
+            $category = ChampionshipAwardCategory::create([
+                'championship_id' => $championship->id,
+                'name' => $name,
+                'description' => 'Categoria legada',
+                'type' => 'vote',
+                'published' => false,
+                'voting_open' => false,
+                'is_active' => false,
+            ]);
+            ChampionshipVote::create([
+                'championship_award_category_id' => $category->id,
+                'voter_id' => $voter->id,
+                'candidate_id' => $candidate->id,
+            ]);
+        }
+
+        $response = $this->getJson("/api/championships/{$championship->id}/awards")
+            ->assertOk()
+            ->assertJsonCount(13);
+
+        $this->assertNotContains('Resenha do Campeonato', collect($response->json())->pluck('name')->all());
+        $this->assertNotContains('Inimigo do Gol', collect($response->json())->pluck('name')->all());
+        $this->assertTrue(collect($response->json())->every(fn (array $award) => filled($award['description'])));
+        $this->assertSame(1, ChampionshipVote::whereHas('category', fn ($query) => $query->where('name', 'Resenha do Campeonato'))->count());
+        $this->assertSame(1, ChampionshipVote::whereHas('category', fn ($query) => $query->where('name', 'Inimigo do Gol'))->count());
     }
 
     public function test_playoffs_cannot_be_generated_until_all_ten_group_matches_are_finished(): void
@@ -438,6 +536,28 @@ class ChampionshipWorkflowTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_finished_and_cancelled_matches_reject_participation_and_event_changes(): void
+    {
+        $fixture = $this->makeMatchFixture();
+        $match = $fixture['match'];
+        $event = ChampionshipMatchEvent::create([
+            'match_id' => $match->id,
+            'scorer_id' => $fixture['homeScorer']->id,
+            'team_id' => $fixture['home']->id,
+            'own_goal' => false,
+        ]);
+        $this->actingAs($this->admin(), 'sanctum');
+
+        foreach (['cancelled', 'finished'] as $status) {
+            $match->update(['status' => $status, 'home_score' => 1, 'away_score' => 0]);
+            $this->postJson("/api/admin/championship-matches/{$match->id}/participation", [
+                'championship_player_ids' => [$fixture['homeScorer']->id],
+            ])->assertUnprocessable();
+            $this->putJson("/api/admin/championship-events/{$event->id}", ['own_goal' => true])->assertUnprocessable();
+            $this->deleteJson("/api/admin/championship-events/{$event->id}")->assertUnprocessable();
+        }
+    }
+
     public function test_participation_rejects_duplicate_ids_without_losing_existing_rows(): void
     {
         $fixture = $this->makeMatchFixture();
@@ -512,14 +632,14 @@ class ChampionshipWorkflowTest extends TestCase
         $roster = $this->createCompleteRoster($championship, $teams);
         $this->actingAs($this->admin(), 'sanctum')->postJson("/api/admin/championships/{$championship->id}/assignments", ['assignments' => $roster['assignments']])->assertOk();
         $this->postJson("/api/admin/championships/{$championship->id}/start")->assertOk();
-        app(ChampionshipFixtureService::class)->generate($championship->fresh());
+        app(ChampionshipFixtureService::class)->generate($championship->fresh(), app(ChampionshipValidationService::class));
         app(ChampionshipAwardService::class)->seed($championship);
 
         $this->getJson("/api/championships/{$championship->id}")
             ->assertOk()
             ->assertJsonCount(5, 'championship.teams')
             ->assertJsonCount(10, 'matches');
-        $this->getJson("/api/championships/{$championship->id}/awards")->assertOk()->assertJsonCount(15);
+        $this->getJson("/api/championships/{$championship->id}/awards")->assertOk()->assertJsonCount(13);
         $this->getJson("/api/championships/{$championship->id}/statistics?phase=group")->assertOk()->assertJsonCount(30);
         $this->getJson("/api/championships/{$championship->id}/rankings?phase=all")
             ->assertOk()
@@ -854,7 +974,7 @@ class ChampionshipWorkflowTest extends TestCase
     private function completeGroupMatchesInTeamOrder(Championship $championship, Collection $teams): void
     {
         $championship->update(['status' => 'active', 'phase' => 'group']);
-        app(ChampionshipFixtureService::class)->generate($championship);
+        app(ChampionshipFixtureService::class)->generate($championship, app(ChampionshipValidationService::class));
         $positions = $teams->pluck('id')->flip();
 
         foreach ($championship->matches()->where('phase', 'group')->get() as $match) {

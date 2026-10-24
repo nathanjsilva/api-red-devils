@@ -10,6 +10,7 @@ use App\Services\ChampionshipAwardService;
 use App\Services\ChampionshipFixtureService;
 use App\Services\ChampionshipOddsService;
 use App\Services\ChampionshipStandingsService;
+use App\Services\ChampionshipValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -24,7 +25,7 @@ class ChampionshipModuleTest extends TestCase
             $championship->teams()->create(['name' => $name]);
         }
         $championship->update(['status' => 'active', 'phase' => 'group']);
-        app(ChampionshipFixtureService::class)->generate($championship);
+        app(ChampionshipFixtureService::class)->generate($championship, app(ChampionshipValidationService::class));
         $this->assertCount(10, $championship->matches()->get());
         $this->assertCount(10, $championship->matches()->select('home_team_id', 'away_team_id')->get()->unique(fn ($m) => min($m->home_team_id, $m->away_team_id).'-'.max($m->home_team_id, $m->away_team_id)));
     }

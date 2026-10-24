@@ -8,15 +8,20 @@ use Illuminate\Support\Facades\DB;
 
 class ChampionshipFixtureService
 {
-    public function generate(Championship $championship): void
+    public function generate(Championship $championship, ChampionshipValidationService $validator): void
     {
-        DB::transaction(function () use ($championship) {
+        DB::transaction(function () use ($championship, $validator) {
             $teams = $championship->teams()->orderBy('id')->get();
             abort_if($teams->count() !== 5, 422, 'O campeonato precisa ter exatamente cinco equipes.');
             if ($championship->matches()->where('phase', 'group')->exists()) {
                 return;
             }
-            abort_if($championship->status !== 'active' || $championship->phase !== 'group', 422, 'Inicie o campeonato antes de gerar os confrontos.');
+            $isDraft = $championship->status === 'draft' && $championship->phase === 'setup';
+            $isActive = $championship->status === 'active' && $championship->phase === 'group';
+            abort_if(! $isDraft && ! $isActive, 422, 'Os confrontos só podem ser gerados durante a configuração ou a fase classificatória.');
+            if ($isDraft) {
+                $validator->validateReady($championship);
+            }
             $rotation = $teams->pluck('id')->push(null)->values()->all();
             for ($round = 1; $round <= 5; $round++) {
                 for ($i = 0; $i < 3; $i++) {
@@ -31,7 +36,9 @@ class ChampionshipFixtureService
                 array_unshift($rotation, $fixed);
                 array_splice($rotation, 1, 0, [$last]);
             }
-            $championship->update(['status' => 'active', 'phase' => 'group']);
+            if ($isActive) {
+                $championship->update(['status' => 'active', 'phase' => 'group']);
+            }
         });
     }
 }

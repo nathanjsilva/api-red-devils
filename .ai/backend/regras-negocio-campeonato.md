@@ -84,7 +84,7 @@ A pontuação é:
 - Empate: 1 ponto.
 - Derrota: 0 pontos.
 
-A tabela calcula posição, jogos, vitórias, empates, derrotas, gols marcados, gols sofridos, saldo de gols, pontos e aproveitamento.
+A tabela calcula posição, jogos, vitórias, empates, derrotas, gols marcados, gols sofridos, saldo de gols, pontos e aproveitamento. Após gerar playoffs, as leituras usam o snapshot salvo, mesmo se o placar de um jogo de grupo for editado posteriormente.
 
 O aproveitamento é calculado por:
 
@@ -139,7 +139,7 @@ O autor e a assistência devem ser participantes do jogo e pertencer à equipe i
 
 No gol contra, o gol beneficia a equipe adversária e não conta para a artilharia do autor. Ao criar, alterar ou excluir um evento, o placar é recalculado automaticamente.
 
-O MVP precisa estar entre os participantes da partida. A quantidade de MVPs é usada nas estatísticas e rankings.
+O MVP precisa estar entre os participantes da partida. A quantidade de MVPs é usada nas estatísticas e rankings. A troca da lista de participantes não verifica eventos já ligados a autores/assistentes removidos; essa inconsistência está registrada na matriz de dependências.
 
 ## 10. Estatísticas
 
@@ -178,7 +178,7 @@ As probabilidades são normalizadas para somar 100%. A odd decimal é calculada 
 1 / probabilidade decimal
 ```
 
-Cada cálculo é salvo com suas probabilidades, odds e parâmetros utilizados. O cálculo é identificado como experimental enquanto não houver histórico suficiente para calibração.
+Cada cálculo é salvo com probabilidades, odds, parâmetros, assinaturas do histórico e do elenco e um número de versão único por partida. Recalcular partida agendada cria nova versão sem sobrescrever a anterior; partidas finalizadas/canceladas não podem ser recalculadas pelo Service. O parâmetro preliminary indica histórico curto.
 
 ## 12. Rankings
 
@@ -198,27 +198,25 @@ Os rankings podem ser filtrados por fase e consideram apenas jogos finalizados.
 
 ## 13. Premiações
 
-Cada campeonato possui quinze categorias:
+A seed atual cria treze categorias ativas. Duas categorias antigas ficam inativas nas competições existentes por migration, para preservar seus votos e resultados históricos, e não são disponibilizadas pela API pública.
 
-- Bola de Ouro.
-- Revelação do Campeonato.
-- Garçom do Campeonato.
-- Paredão do Campeonato.
-- Xerifão do Campeonato.
-- Artilheiro do Campeonato.
-- Craque da Galera.
-- Bagre de Ouro.
-- Decepção do Campeonato.
-- Inimigo do Gol.
-- Pipoqueiro do Campeonato.
-- Avenida do Campeonato.
-- Resenha do Campeonato.
-- Chato do Campeonato.
-- Prêmio Felipe Melo.
+Categorias ativas:
 
-Garçom e Artilheiro são calculados automaticamente pelas estatísticas. As outras categorias são definidas por votação.
+- Bola de Ouro — votação.
+- Revelação do Campeonato — votação.
+- Garçom do Campeonato — estatística de assistências.
+- Paredão do Campeonato — votação, somente goleiros.
+- Xerifão do Campeonato — votação, posição defensiva elegível.
+- Artilheiro do Campeonato — estatística de gols válidos.
+- Craque da Galera — votação.
+- Bagre de Ouro — votação.
+- Decepção do Campeonato — votação.
+- Pipoqueiro do Campeonato — votação.
+- Avenida do Campeonato — votação.
+- Chato do Campeonato — votação.
+- Prêmio Felipe Melo — votação.
 
-Paredão aceita somente goleiros. Xerifão exige um jogador inscrito com posição defensiva elegível. As demais categorias aceitam os participantes conforme as regras gerais de votação.
+Garçom e Artilheiro são publicados a partir das estatísticas do campeonato. As outras onze categorias recebem voto. Categorias históricas inativas continuam no banco, mas as consultas e fluxos de voto usam somente categorias ativas.
 
 ## 14. Votação
 
@@ -240,13 +238,15 @@ Os votos são persistidos individualmente. As categorias permanecem disponíveis
 
 ## 15. Auditoria e integridade
 
-As operações administrativas críticas possuem registro de auditoria, incluindo início do campeonato, alterações de equipe, brasões, sorteios e desempates.
+O serviço de auditoria é chamado no início do campeonato, edição de nome/brasão de equipe, desempate, encerramento da votação e manutenção administrativa de votantes. Não há operação de sorteio de goleiros ligada às rotas atuais. A tabela championship_goalkeeper_draws existe no schema, mas não é usada por controller ou Service consultado.
 
-O sistema protege a integridade por meio de validações de limite, relacionamentos entre campeonato e participantes, unicidade de inscrições, unicidade de Pedras, vínculos exclusivos de jogadores às equipes e vínculo exclusivo entre conta e jogador.
+O sistema aplica validações de limite, de escopo entre campeonato/equipe/participante, unicidade de inscrições, unicidade de Pedras e um time por inscrição. A exclusividade de users.player_id é verificada pelo controller, mas não há índice UNIQUE correspondente na migration.
 
 O cadastro global de jogadores não é excluído nem alterado quando o participante é usado em um campeonato.
 
 ## 16. Fluxo operacional
+
+As fixtures podem ser geradas em draft, depois de validar o elenco, ou em active/group. O endpoint de início valida o elenco, mas não exige que os confrontos já existam.
 
 O fluxo esperado é:
 
@@ -254,7 +254,7 @@ O fluxo esperado é:
 2. Ajustar nomes e brasões dos times.
 3. Inscrever 25 jogadores de linha e 5 goleiros.
 4. Distribuir os jogadores de linha nas cinco equipes.
-5. Sortear os goleiros.
+5. Inscrever cada goleiro já vinculado a uma das equipes do campeonato.
 6. Validar e iniciar o campeonato.
 7. Gerar e finalizar os dez jogos classificatórios.
 8. Gerar os playoffs.
@@ -265,11 +265,11 @@ O fluxo esperado é:
 
 ## 17. Entidades e integridade referencial
 
-- `championships` é a raiz do agregado. Equipes, inscrições, partidas, categorias de premiação, sorteios de goleiros, desempates e auditoria pertencem a um campeonato.
+- `championships` é a raiz do agregado. Equipes, inscrições, partidas, categorias de premiação, desempates e auditoria pertencem a um campeonato. A tabela championship_goalkeeper_draws existe, mas não participa das rotas/Services atuais.
 - `championship_players` liga um `Player` global a um campeonato e guarda tipo, Pedra, classificação decimal e posição esportiva. A inscrição não copia nem altera o cadastro global.
 - `championship_team_players` liga cada inscrição a no máximo uma equipe. O vínculo de goleiro é criado junto com a inscrição; os vínculos dos jogadores de linha são substituídos pela operação de formação.
 - `championship_matches` referencia duas equipes do campeonato. Eventos, participações e odds pertencem à partida; resultado e pênaltis são campos distintos.
-- Eventos e participações referenciam inscrições do campeonato, não cadastros de jogador de outros campeonatos. Apagar um campeonato apaga suas entidades subordinadas por cascata; apagar um jogador global inscrito é bloqueado enquanto houver inscrição.
+- Eventos e participações referenciam inscrições do campeonato, não cadastros de jogador de outros campeonatos. Apagar um campeonato apaga suas entidades subordinadas por cascata; a exclusão física de jogador global inscrito é restringida pela FK; o DELETE administrativo atual usa soft delete e não é bloqueado pela inscrição, podendo ocultar a relação Player nas leituras do campeonato.
 - Categorias, votos e resultados pertencem ao campeonato por meio da categoria. O voto identifica o eleitor e o candidato; resultado publicado não altera os votos individuais.
 - `users.player_id` é um vínculo administrativo legado entre conta e cadastro global do jogador. Ele não substitui o cadastro simplificado de votante descrito na seção 21.
 
@@ -277,11 +277,11 @@ O fluxo esperado é:
 
 | Operação | Pré-condições | Resultado e restrições |
 |---|---|---|
-| Criar campeonato | Administrador autenticado; nome obrigatório com até 100 caracteres | Cria em `draft`/`setup`, cinco equipes padrão e quinze categorias. |
+| Criar campeonato | Administrador autenticado; nome obrigatório com até 100 caracteres | Cria em draft/setup, cinco equipes padrão e treze categorias ativas; categorias legadas inativas são preservadas. |
 | Inscrever atleta | Campeonato `draft`; atleta global existente; tipo compatível; limite e classificação disponíveis | Cria uma inscrição; goleiro exige equipe do mesmo campeonato ainda sem goleiro. |
 | Formar equipes | Campeonato `draft`; cinco equipes próprias e cinco inscrições de linha distintas por equipe | Em uma transação substitui os vínculos de linha; falha de validação preserva a formação anterior. Goleiros permanecem vinculados. |
 | Iniciar | Campeonato `draft`; cinco equipes completas, 25 atletas de linha (uma Pedra por equipe) e cinco goleiros (um por equipe) | Muda para `active`/`group` e registra auditoria. |
-| Gerar primeira fase | Campeonato ativo; cinco equipes | Cria dez partidas únicas em cinco rodadas, sem duplicar confrontos em nova chamada. |
+| Gerar primeira fase | Cinco equipes; em draft exige roster válido, ou em active/group aceita a fase de grupos | Cria dez partidas únicas em cinco rodadas; se já houver partida de grupo, retorna sem criar outra. |
 | Finalizar partida | Partida existente; placares inteiros não negativos; desempate por pênaltis em mata-mata empatado | Atualiza placar/status; vitória/empate alimenta tabela. A final concluída encerra o campeonato. |
 | Gerar playoffs | Campeonato na fase de grupos; dez partidas de grupo concluídas | Salva snapshot da classificação e cria `2º x 5º` e `3º x 4º`; chamadas repetidas não recriam semifinais. |
 | Registrar evento/participação | Atleta inscrito em uma das equipes da partida; evento associado à equipe válida | Recalcula o placar pelos gols e gols contra; MVP e eventos só podem usar participantes válidos. |
@@ -301,7 +301,7 @@ Estados de campeonato persistidos: `draft`, `active`, `playoffs` e `finished`; f
 
 ## 20. Critérios verificáveis do módulo existente
 
-1. Criar campeonato administrativo gera exatamente cinco equipes e quinze categorias (13 de voto, abertas inicialmente, e duas estatísticas automáticas).
+1. Criar campeonato administrativo gera cinco equipes e treze categorias ativas (onze de votação, abertas inicialmente, e duas estatísticas automáticas); duas categorias antigas podem permanecer inativas em campeonatos existentes.
 2. Inscrição repetida, tipo incompatível, classificação duplicada/incompatível, equipe externa ou limite excedido é rejeitado sem duplicar dados.
 3. Uma formação válida tem cinco jogadores de linha, uma Pedra de cada grupo, em cada equipe; uma tentativa inválida não apaga a formação existente.
 4. Os dez confrontos de grupo cobrem cada par de equipes uma única vez; cada rodada contém dois jogos e uma folga.

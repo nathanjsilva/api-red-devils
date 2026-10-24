@@ -9,6 +9,6 @@ class ChampionshipMatch extends Model
     public function awayTeam() { return $this->belongsTo(ChampionshipTeam::class, 'away_team_id'); }
     public function events() { return $this->hasMany(ChampionshipMatchEvent::class, 'match_id'); }
     public function participations() { return $this->hasMany(ChampionshipMatchParticipation::class, 'match_id'); }
-    public function odds() { return $this->hasOne(ChampionshipOdds::class, 'match_id'); }
+    public function odds() { return $this->hasOne(ChampionshipOdds::class, 'match_id')->latestOfMany('calculation_version'); }
     public function championship() { return $this->belongsTo(Championship::class); }
 }

@@ -94,6 +94,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::post('championships/{championship}/players', [ChampionshipController::class, 'registerPlayer']);
     Route::post('championships/{championship}/assignments', [ChampionshipController::class, 'assignPlayers']);
     Route::post('championships/{championship}/fixtures', [ChampionshipController::class, 'generateFixtures']);
+    Route::post('championships/{championship}/odds', [ChampionshipController::class, 'calculateChampionshipOdds']);
     Route::post('championships/{championship}/start', [ChampionshipController::class, 'start']);
     Route::put('championship-teams/{team}', [ChampionshipController::class, 'updateTeam']);
     Route::post('championships/{championship}/standings/tie-breaker', [ChampionshipController::class, 'resolveTie']);
