@@ -303,6 +303,20 @@ class ChampionshipController extends Controller
             abort_if(collect($data['championship_player_ids'])->diff($valid)->isNotEmpty(), 422, 'Participante não pertence a uma equipe do jogo.');
             abort_if(isset($data['mvp_id']) && ! in_array((int) $data['mvp_id'], array_map('intval', $data['championship_player_ids']), true), 422, 'O MVP precisa participar do jogo.');
 
+            $removedParticipants = $match->participations()
+                ->pluck('championship_player_id')
+                ->diff(array_map('intval', $data['championship_player_ids']));
+            if ($removedParticipants->isNotEmpty()) {
+                $hasReferencedEvents = $match->events()
+                    ->where(function ($query) use ($removedParticipants) {
+                        $query->whereIn('scorer_id', $removedParticipants)
+                            ->orWhereIn('assist_id', $removedParticipants);
+                    })
+                    ->exists();
+
+                abort_if($hasReferencedEvents, 422, 'Remova ou ajuste os eventos antes de retirar um participante.');
+            }
+
             $match->participations()->delete();
             foreach ($data['championship_player_ids'] as $id) {
                 ChampionshipMatchParticipation::create([
