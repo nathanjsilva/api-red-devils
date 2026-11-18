@@ -19,19 +19,21 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/players', [PlayerController::class, 'index']);
 Route::get('/players/{id}', [PlayerController::class, 'show']);
 
-Route::get('/championships', [ChampionshipController::class, 'index']);
-Route::get('/championships/{championship}', [ChampionshipController::class, 'show']);
-Route::get('/championships/{championship}/awards', [ChampionshipController::class, 'awards']);
-Route::get('/championships/{championship}/statistics', [ChampionshipController::class, 'statistics']);
-Route::get('/championships/{championship}/rankings', [ChampionshipController::class, 'rankings']);
-Route::get('/championship-teams/{team}/crest', [ChampionshipController::class, 'showCrest']);
-Route::middleware('auth:sanctum')->post('/championship-awards/{category}/votes', [ChampionshipController::class, 'vote']);
-Route::get('/championships/{championship}/voting/players', [ChampionshipVoterController::class, 'players']);
-Route::post('/championships/{championship}/voting/voters', [ChampionshipVoterController::class, 'register'])->middleware('throttle:10,1');
-Route::post('/championships/{championship}/voting/session', [ChampionshipVoterController::class, 'login'])->middleware('throttle:20,1');
-Route::get('/championships/{championship}/voting/session', [ChampionshipVoterController::class, 'status']);
-Route::delete('/championships/{championship}/voting/session', [ChampionshipVoterController::class, 'logout']);
-Route::post('/championship-votes/{category}', [ChampionshipVoterController::class, 'vote'])->middleware('throttle:30,1');
+Route::middleware('championships.enabled')->group(function () {
+    Route::get('/championships', [ChampionshipController::class, 'index']);
+    Route::get('/championships/{championship}', [ChampionshipController::class, 'show']);
+    Route::get('/championships/{championship}/awards', [ChampionshipController::class, 'awards']);
+    Route::get('/championships/{championship}/statistics', [ChampionshipController::class, 'statistics']);
+    Route::get('/championships/{championship}/rankings', [ChampionshipController::class, 'rankings']);
+    Route::get('/championship-teams/{team}/crest', [ChampionshipController::class, 'showCrest']);
+    Route::middleware('auth:sanctum')->post('/championship-awards/{category}/votes', [ChampionshipController::class, 'vote']);
+    Route::get('/championships/{championship}/voting/players', [ChampionshipVoterController::class, 'players']);
+    Route::post('/championships/{championship}/voting/voters', [ChampionshipVoterController::class, 'register'])->middleware('throttle:10,1');
+    Route::post('/championships/{championship}/voting/session', [ChampionshipVoterController::class, 'login'])->middleware('throttle:20,1');
+    Route::get('/championships/{championship}/voting/session', [ChampionshipVoterController::class, 'status']);
+    Route::delete('/championships/{championship}/voting/session', [ChampionshipVoterController::class, 'logout']);
+    Route::post('/championship-votes/{category}', [ChampionshipVoterController::class, 'vote'])->middleware('throttle:30,1');
+});
 
 Route::get('/peladas', [PeladaController::class, 'index']);
 Route::get('/peladas/date/{date}', [PeladaController::class, 'byDate']);
@@ -89,7 +91,9 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::put('match-players/{id}', [AdminMatchPlayerController::class, 'update']);
     Route::delete('match-players/{id}', [AdminMatchPlayerController::class, 'destroy']);
     Route::put('peladas/{peladaId}/players/{playerId}/statistics', [AdminMatchPlayerController::class, 'upsertByPlayerAndPelada']);
+});
 
+Route::middleware(['championships.enabled', 'auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     Route::post('championships', [ChampionshipController::class, 'store']);
     Route::post('championships/{championship}/players', [ChampionshipController::class, 'registerPlayer']);
     Route::post('championships/{championship}/assignments', [ChampionshipController::class, 'assignPlayers']);
